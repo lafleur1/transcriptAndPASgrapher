@@ -5,7 +5,7 @@
 
 import pyensembl
 import pandas as pd
-from transcriptGraphing import SpliceVariantPASDiagram
+from transcriptGraphing import SpliceVariantPASDiagram, MultiGeneVariantPASDiagram
 from Bio import SeqIO
 
 #pulls current release version for the human genome
@@ -40,13 +40,18 @@ def graphGeneTranscripts(geneId, thicken):
 	transcriptGraph.show()
 
 #filters for PAS Clusters in a given gene range
-def findAllPASClustersInRangeOnStrand(gene, chromosomePAS):
+def findAllPASClustersInGene(gene, chromosomePAS):
 	maskPAS = (chromosomePAS['start'] > gene.start - 1) & (chromosomePAS['end'] < gene.end+ 1) & (chromosomePAS['strand'] == gene.strand)
 	maskedPAS = chromosomePAS[maskPAS]
 	return maskedPAS
 	
-	
-def PASClusterToListFormat(clusters):
+
+def findallPASClustersInRangeBothStrands(start, stop, chromosomePAS):
+	maskPAS = (chromosomePAS['start'] > start - 1) & (chromosomePAS['end'] < stop+ 1)
+	maskedPAS = chromosomePAS[maskPAS]
+	return maskedPAS
+
+def PASClusterToListFormatSingleStrand(clusters):
 	positions = []
 	types = []
 	for index, row in clusters.iterrows():
@@ -54,10 +59,21 @@ def PASClusterToListFormat(clusters):
 		types.append(row.type)
 	return positions, types
 
+def PASClusterToListFormatDoubleStrand(clusters):
+	positions = [[],[]]
+	types = [[],[]]
+	for index, row in clusters.iterrows():
+		if row.strand == "+":
+			positions[0].append([row.start, row.end])
+			types[0].append(row.type)
+		else:
+			positions[1].append([row.start, row.end])
+			types[1].append(row.type)
+	return positions, types
 
 def graphGeneandPAS(gene, chromosomePAS, dropdowns):
 	inGene = findAllPASClustersInRangeOnStrand(gene, chromosomePAS)
-	pasPositions, pasTypes = PASClusterToListFormat(inGene)
+	pasPositions, pasTypes = PASClusterToListFormatSingleStrand(inGene)
 	graphTitle = gene.name + " " + gene.contig + ":" + str(gene.start) + "-" + str(gene.end) + "(" + gene.strand + ")"
 	transcriptsPos = []
 	transcriptNames = []
@@ -68,35 +84,81 @@ def graphGeneandPAS(gene, chromosomePAS, dropdowns):
 		transcriptsPos.append(temp[::-1])
 	transcriptGraph = SpliceVariantPASDiagram(transcriptsPos, transcript_names = transcriptNames, pas_pos= pasPositions, pas_types = pasTypes, diagramTitle = graphTitle, dropDownPASMarkers = dropdowns)
 	transcriptGraph.show()
-	
 
 
+def extractTotalSpanFromGenePositions(gps):
+	total_span_beginning = float('inf')
+	total_span_end = float('-inf')
+	for g in gps:
+		if g[0] <= total_span_beginning:
+			total_span_beginning = g[0]
+		if g[1] >= total_span_end:
+			total_span_end = g[1]
+	return total_span_beginning, total_span_end
+
+
+def transformPyEnsemblToPASDiagram(geneList):
+	positions = []
+	names = []
+	geneNames = []
+	genePositions = []
+	geneStrands = []
+	geneAddress = []
+	for g in geneList:
+		dummyPos = [] #store all transcripts for the gene
+		dummyNames = []
+		for t in g.transcripts:
+			dummyPos.append([[exon.start, exon.end] for exon in t.exons])
+			dummyNames.append(t.id + " " + t.biotype)
+		positions.append(dummyPos)
+		names.append(dummyNames)
+		geneNames.append(g.id + ": " + g.name + " "+ g.biotype)
+		genePositions.append([g.start,g.end])
+		geneStrands.append(g.strand)
+		geneAddress.append(g.name + " " + g.contig + ":" + str(g.start) + "-" + str(g.end) + "(" + g.strand + ")")
+	return positions, names, geneNames, genePositions, geneStrands, geneAddress
 
 onChrY = openPASClustersForChromosome("Y")
 contigSeq = SeqIO.read("chrY.fasta", "fasta")
 print ("total length of chromosome Y: ", len(contigSeq.seq))
 
 #position w/ 3 genes overlapping in the annotation 
+#finding genes which overlap 
 
-'''
+
+
+
+
 notFoundTwo = True
 posCurrent = 2786855
 while notFoundTwo:
 	genesDemo = ensembl.genes_at_locus(contig = "Y", position = posCurrent)
-	if len(genesDemo) > 2:
-		notFoundTwo = False
+	if len(genesDemo) > 1:
+		#notFoundTwo = False
+		print (posCurrent)
+		print (genesDemo)		
+		#print (genesDemo)
+		#findAllPASClustersInRangeOnStrand(genesDemo[0], onChrY)
+		p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesDemo)
+		start, stop = extractTotalSpanFromGenePositions(gp) 
+		pasTable = findallPASClustersInRangeBothStrands(start, stop, onChrY)
+		print (pasTable)
+		preppedPASLocs, preppedPASTypes = PASClusterToListFormatDoubleStrand(pasTable)
+		print (preppedPASLocs)
+		print (preppedPASTypes)
+		mgraph = MultiGeneVariantPASDiagram(p, tn, gn, gp,  gs, pas_pos= preppedPASLocs, pas_types = preppedPASTypes)
+		mgraph.show()
+		posCurrent += (stop - start)
 	else:
 		posCurrent += 1
 	if posCurrent >= len(contigSeq.seq):
 		notFoundTwo = False 
 
-print (posCurrent)
-print (genesDemo)		
-#print (genesDemo)
-#findAllPASClustersInRangeOnStrand(genesDemo[0], onChrY)
-#graphGeneandPAS(genesDemo[0], onChrY)
-'''
 
+#graphGeneandPAS(genesDemo[0], onChrY)
+
+#finding gene with most PAS signals contained
+'''
 gene_ids = ensembl.gene_ids()
 genes = [ensembl.gene_by_id(gene_id) for gene_id in gene_ids]
 genesOnYChr = [gene for gene in genes if gene.contig == 'Y']
@@ -112,5 +174,6 @@ print ("highest number in gene: ", maxPAS)
 print ("Gene is: ", bestGene)
 #graphGeneTranscripts(bestGene, True)
 #graphGeneTranscripts(bestGene, False)
-gene = ensembl.gene_by_id(bestGene)
-graphGeneandPAS(gene, onChrY, True)
+#gene = ensembl.gene_by_id(bestGene)
+#graphGeneandPAS(gene, onChrY, True)
+'''
