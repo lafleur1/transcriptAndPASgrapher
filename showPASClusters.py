@@ -96,6 +96,16 @@ def extractTotalSpanFromGenePositions(gps):
 			total_span_end = g[1]
 	return total_span_beginning, total_span_end
 
+def extractTotalSpanFromGenes(gps):
+	total_span_beginning = float('inf')
+	total_span_end = float('-inf')
+	for g in gps:
+		if g[0] <= total_span_beginning:
+			total_span_beginning = g[0]
+		if g[1] >= total_span_end:
+			total_span_end = g[1]
+	return total_span_beginning, total_span_end
+
 
 def transformPyEnsemblToPASDiagram(geneList):
 	positions = []
@@ -130,7 +140,7 @@ print ("total length of chromosome Y: ", len(contigSeq.seq))
 
 
 notFoundTwo = True
-posCurrent = 2786855
+posCurrent = 6900000
 while notFoundTwo:
 	genesDemo = ensembl.genes_at_locus(contig = "Y", position = posCurrent)
 	if len(genesDemo) > 1:
@@ -142,10 +152,13 @@ while notFoundTwo:
 		p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesDemo)
 		start, stop = extractTotalSpanFromGenePositions(gp) 
 		pasTable = findallPASClustersInRangeBothStrands(start, stop, onChrY)
+		genesRound2 = ensembl.genes_at_locus(contig = "Y", position = start, end = stop)
+		p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesRound2)
+		print (genesRound2)
 		print (pasTable)
 		preppedPASLocs, preppedPASTypes = PASClusterToListFormatDoubleStrand(pasTable)
-		print (preppedPASLocs)
-		print (preppedPASTypes)
+		#print (preppedPASLocs)
+		#print (preppedPASTypes)
 		mgraph = MultiGeneVariantPASDiagram(p, tn, gn, gp,  gs, pas_pos= preppedPASLocs, pas_types = preppedPASTypes)
 		mgraph.show()
 		posCurrent += (stop - start)
@@ -154,9 +167,23 @@ while notFoundTwo:
 	if posCurrent >= len(contigSeq.seq):
 		notFoundTwo = False 
 
+'''
 
+#errors in database???
+id1 = "Y:6919894:+"
+genes = ensembl.genes_at_locus(contig = "Y", position = 6919894)
+print (genes)
+id2 = "Y:6920421:+"
+genes = ensembl.genes_at_locus(contig = "Y", position = 6919894)
+print (genes)
+id3 = "Y:6920474:+"
+genes = ensembl.genes_at_locus(contig = "Y", position = 6919894)
+print (genes)
+id4 = "Y:7102025:+"
+genes = ensembl.genes_at_locus(contig = "Y", position = 6919894)
+print (genes)
 #graphGeneandPAS(genesDemo[0], onChrY)
-
+'''
 #finding gene with most PAS signals contained
 '''
 gene_ids = ensembl.gene_ids()
