@@ -9,7 +9,7 @@ from transcriptGraphing import SpliceVariantPASDiagram, MultiGeneVariantPASDiagr
 from Bio import SeqIO
 
 #pulls current release version for the human genome
-ensembl = pyensembl.EnsemblRelease()
+ensembl = pyensembl.EnsemblRelease(release = '96')
 
 #opens human cluster data for given chromosome.  Can optionally filter by PAS type
 def openPASClustersForChromosome(name, pasType = 'All'):
@@ -131,14 +131,60 @@ def transformPyEnsemblToPASDiagram(geneList):
 onChrY = openPASClustersForChromosome("Y")
 contigSeq = SeqIO.read("chrY.fasta", "fasta")
 print ("total length of chromosome Y: ", len(contigSeq.seq))
-
-#position w/ 3 genes overlapping in the annotation 
-#finding genes which overlap 
+auPAS = onChrY[onChrY['type'] == 'AU']
 
 
+igPAS = onChrY[onChrY['type'] == 'IG']
+for i, row in igPAS.iterrows():
+	#graph genes around first AU PAS
+	print (row)
+	start = int(row['start']) - 10000
+	stop = int(row['end']) + 10000
+	genesRound2 = ensembl.genes_at_locus(contig = "Y", position = start, end = stop)
+	#print (genesRound2)
+	for g in genesRound2:
+	#	print (g.name)
+		for t in g.transcripts:
+			print (t.name)
+			if t.contains_start_codon:
+				print (t.start_codon_positions)
+			else:
+				print ("No start codon annotation")
+			
+	p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesRound2)
+	pasPos, pasType = PASClusterToListFormatDoubleStrand(igPAS[igPAS['clusterID'] == row['clusterID']])
+	#print (pasPos, pasType)
+	mgraph = MultiGeneVariantPASDiagram(p, tn, gn, gp,  gs, pas_pos= pasPos, pas_types = pasType, startOverride = start, stopOverride = stop)
+	mgraph.show()
+
+
+for i, row in auPAS.iterrows():
+	#graph genes around first AU PAS
+	print (row)
+	start = int(row['start']) - 2000
+	stop = int(row['end']) + 2000
+	genesRound2 = ensembl.genes_at_locus(contig = "Y", position = start, end = stop)
+	#print (genesRound2)
+	for g in genesRound2:
+	#	print (g.name)
+		for t in g.transcripts:
+			print (t.name)
+			if t.contains_start_codon:
+				print (t.start_codon_positions)
+			else:
+				print ("No start codon annotation")
+			
+	p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesRound2)
+	pasPos, pasType = PASClusterToListFormatDoubleStrand(auPAS[auPAS['clusterID'] == row['clusterID']])
+	#print (pasPos, pasType)
+	mgraph = MultiGeneVariantPASDiagram(p, tn, gn, gp,  gs, pas_pos= pasPos, pas_types = pasType, startOverride = start, stopOverride = stop)
+	mgraph.show()
 
 
 
+
+
+'''
 notFoundTwo = True
 posCurrent = 6900000
 while notFoundTwo:
@@ -166,6 +212,10 @@ while notFoundTwo:
 		posCurrent += 1
 	if posCurrent >= len(contigSeq.seq):
 		notFoundTwo = False 
+'''
+
+
+
 
 '''
 
@@ -191,14 +241,23 @@ genes = [ensembl.gene_by_id(gene_id) for gene_id in gene_ids]
 genesOnYChr = [gene for gene in genes if gene.contig == 'Y']
 maxPAS = float('-inf')
 bestGene = ""
+totalTranscripts = 0
+totalTranscriptsWithStart = 0
 for gene in genesOnYChr:
-	inGene = findAllPASClustersInRangeOnStrand(gene, onChrY)
+	#inGene = findAllPASClustersInRangeOnStrand(gene, onChrY)
 	#print ("Numbe PAS clusters: ", inGene.shape[0])
-	if inGene.shape[0] > maxPAS:
-		maxPAS = inGene.shape[0]
-		bestGene = gene.id
-print ("highest number in gene: ", maxPAS)
-print ("Gene is: ", bestGene)
+	#if inGene.shape[0] > maxPAS:
+	#	maxPAS = inGene.shape[0]
+	#	bestGene = gene.id
+	for t in gene.transcripts:
+		totalTranscripts += 1
+		if t.contains_start_codon:
+			print (t)
+			totalTranscriptsWithStart += 1
+print (totalTranscripts)
+print (totalTranscriptsWithStart)
+#print ("highest number in gene: ", maxPAS)
+#print ("Gene is: ", bestGene)
 #graphGeneTranscripts(bestGene, True)
 #graphGeneTranscripts(bestGene, False)
 #gene = ensembl.gene_by_id(bestGene)

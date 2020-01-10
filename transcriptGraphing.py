@@ -253,7 +253,7 @@ class MultiGeneVariantPASDiagram(object):
 			
 			
 				
-	def __init__(self, transcript_positions, transcript_names, gene_names, gene_positions,  gene_strands, gene_colors = [], pas_pos=[], pas_types = [], marker_heights=[], marker_size=100, marker_weight=1.5, intron_color="gray", intron_weight=1, intron_style='-', bar_color='gray', bg_color="white", diagramTitle = "", dropDownPASMarkers = True):
+	def __init__(self, transcript_positions, transcript_names, gene_names, gene_positions,  gene_strands, gene_colors = [], pas_pos=[], pas_types = [], startOverride = 0, stopOverride = 0, marker_heights=[], marker_size=100, marker_weight=1.5, intron_color="gray", intron_weight=1, intron_style='-', bar_color='gray', bg_color="white", diagramTitle = "", dropDownPASMarkers = True):
 		###transcripts
 		self.numberGenes = len(gene_names) #number of splice variants on Ensembl for the gene 
 		self.transcriptPositions = transcript_positions
@@ -266,7 +266,17 @@ class MultiGeneVariantPASDiagram(object):
 		else:
 			self.geneColors = self._generateRandomColors(self.numberGenes)
 			print (self.geneColors)
-		self.smallestIndex, self.largestIndex = self.extractTotalSpanFromGenePositions(self.genePositions)
+		if startOverride == stopOverride == 0:
+			self.smallestIndex, self.largestIndex = self.extractTotalSpanFromGenePositions(self.genePositions)
+		elif startOverride != 0 and stopOverride != 0:
+			self.smallestIndex = startOverride
+			self.largestIndex = stopOverride
+		elif startOverride != 0 and stopOverride == 0:
+			self.smallestIndex = startOverride
+			_, self.largestIndex = self.extractTotalSpanFromGenePositions(self.genePositions)
+		elif startOverride == 0 and stopOverride != 0:
+			self.smallestIndex, _ = self.extractTotalSpanFromGenePositions(self.genePositions)
+			self.largestIndex = stopOverride
 		#print ("smallest: ", self.smallestIndex, " ", "largest: ", self.largestIndex)
 		self.totalSpan =  self.largestIndex - self.smallestIndex
 		
