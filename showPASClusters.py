@@ -25,7 +25,8 @@ def openPASClustersForChromosome(name, pasType = 'All'):
 		maskedTrue = currentTrueVals[maskType]
 		return maskedTrue
 			
-
+	
+	
 #creates gene graph w/out PAS markers for a strand 
 def graphGeneTranscripts(geneId, thicken):
 	gene = ensembl.gene_by_id(geneId)
@@ -39,6 +40,8 @@ def graphGeneTranscripts(geneId, thicken):
 	transcriptGraph = SpliceVariantPASDiagram(transcriptsPos, transcript_names = transcriptNames, diagramTitle = graphTitle, thickenExons = thicken)
 	transcriptGraph.show()
 
+
+
 #filters for PAS Clusters in a given gene range
 def findAllPASClustersInGene(gene, chromosomePAS):
 	maskPAS = (chromosomePAS['start'] > gene.start - 1) & (chromosomePAS['end'] < gene.end+ 1) & (chromosomePAS['strand'] == gene.strand)
@@ -51,25 +54,37 @@ def findallPASClustersInRangeBothStrands(start, stop, chromosomePAS):
 	maskedPAS = chromosomePAS[maskPAS]
 	return maskedPAS
 
+
+#ENSEMBL is 1-based indexing
+#PolyASite2.0 is 0-based indexing
+#change polyAsite to Ensembl notation here
+def correctPolyASiteIndexing(pasRange):
+	return [pasRange[0]+1, pasRange[1]+1]
+	
+
+
+#correct indexing here to Ensembl 1-based
 def PASClusterToListFormatSingleStrand(clusters):
 	positions = []
 	types = []
 	for index, row in clusters.iterrows():
-		positions.append([row.start, row.end])
+		positions.append(correctPolyASiteIndexing([row.start, row.end]))
 		types.append(row.type)
 	return positions, types
 
+#correct indexing here to Ensembl 1-based
 def PASClusterToListFormatDoubleStrand(clusters):
 	positions = [[],[]]
 	types = [[],[]]
 	for index, row in clusters.iterrows():
 		if row.strand == "+":
-			positions[0].append([row.start, row.end])
+			positions[0].append(correctPolyASiteIndexing([row.start, row.end]))
 			types[0].append(row.type)
 		else:
-			positions[1].append([row.start, row.end])
+			positions[1].append(correctPolyASiteIndexing([row.start, row.end]))
 			types[1].append(row.type)
 	return positions, types
+
 
 def graphGeneandPAS(gene, chromosomePAS, dropdowns):
 	inGene = findAllPASClustersInRangeOnStrand(gene, chromosomePAS)
@@ -124,6 +139,8 @@ def transformPyEnsemblToPASDiagram(geneList):
 		names.append(dummyNames)
 		geneNames.append(g.id + ": " + g.name + " "+ g.biotype)
 		genePositions.append([g.start,g.end])
+		print (g.start)
+		print (g.end)
 		geneStrands.append(g.strand)
 		geneAddress.append(g.name + " " + g.contig + ":" + str(g.start) + "-" + str(g.end) + "(" + g.strand + ")")
 	return positions, names, geneNames, genePositions, geneStrands, geneAddress
@@ -132,8 +149,11 @@ onChrY = openPASClustersForChromosome("Y")
 contigSeq = SeqIO.read("chrY.fasta", "fasta")
 print ("total length of chromosome Y: ", len(contigSeq.seq))
 auPAS = onChrY[onChrY['type'] == 'AU']
+print (onChrY)
+print (onChrY.shape[0])
 
 
+'''
 igPAS = onChrY[onChrY['type'] == 'IG']
 for i, row in igPAS.iterrows():
 	#graph genes around first AU PAS
@@ -156,8 +176,9 @@ for i, row in igPAS.iterrows():
 	#print (pasPos, pasType)
 	mgraph = MultiGeneVariantPASDiagram(p, tn, gn, gp,  gs, pas_pos= pasPos, pas_types = pasType, startOverride = start, stopOverride = stop)
 	mgraph.show()
+'''
 
-
+'''
 for i, row in auPAS.iterrows():
 	#graph genes around first AU PAS
 	print (row)
@@ -180,7 +201,7 @@ for i, row in auPAS.iterrows():
 	mgraph = MultiGeneVariantPASDiagram(p, tn, gn, gp,  gs, pas_pos= pasPos, pas_types = pasType, startOverride = start, stopOverride = stop)
 	mgraph.show()
 
-
+'''
 
 
 
@@ -212,8 +233,8 @@ while notFoundTwo:
 		posCurrent += 1
 	if posCurrent >= len(contigSeq.seq):
 		notFoundTwo = False 
-'''
 
+'''
 
 
 

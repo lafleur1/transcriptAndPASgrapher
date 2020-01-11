@@ -19,10 +19,9 @@ class ExonDiagram(object):
 '''			
 		
 
-
 class SpliceVariantPASDiagram(object):
 	
-	def __init__(self, transcripts, strands = [], transcript_names = [],  pas_pos=[], pas_types = [], marker_heights=[], marker_size=50, marker_weight=1, exon_colors= [], intron_color="gray", intron_weight=1, intron_style='-', bar_color='gray', bg_color="white", diagramTitle = "", thickenExons = True, dropDownPASMarkers = False):
+	def __init__(self, transcripts, strands = [], transcript_names = [],  pas_pos=[], pas_types = [], marker_heights=[], marker_size=50, marker_weight=1, exon_colors= [], intron_color="gray", intron_weight=1, intron_style='-', bar_color='gray', bg_color="white", diagramTitle = "", thickenExons = True, dropDownPASMarkers = False, modelPredictions = []):
 		###transcripts
 		self.numberTranscripts = len(transcripts) #number of splice variants on Ensembl for the gene 
 		self.transcripts = transcripts 
@@ -54,6 +53,9 @@ class SpliceVariantPASDiagram(object):
 		self.markerSize = marker_size
 		self.MarkerWeight = marker_weight
 		self.colorKey = {'TE': "red", "EX": "salmon", "IN": "deepskyblue", "DS": "forestgreen", "AE": "darkred", "AI": "midnightblue", "AU": "limegreen", "IG": "gold"} #colors for the 8 PAS cluster types 
+		#model predictions
+		self.modelPredictions = modelPredictions #numpy array of model predictions on that slice
+		
 		###graph stuff
 		self.dropDownPASMarkers = dropDownPASMarkers
 		self.thickenExons = thickenExons #if True, adjusts exon ranges so that very small ones still appear in overall graph.  If false, does not adjust
@@ -148,7 +150,6 @@ class SpliceVariantPASDiagram(object):
 			canvas.add_artist(l1)
 			#ax.legend(loc='center left', bbox_to_anchor=(1, 0.5)))
 
-				
         
 	#place markers between smallest/largest
 	def _clean_axes(self):
