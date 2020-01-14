@@ -8,6 +8,7 @@
  
 import pyensembl
 import pandas as pd 
+from Bio import SeqIO
 
 #Note: Ensembl is 1-based, polyAsite is 0-based
 
@@ -122,27 +123,204 @@ print (row1['type'])
 '''
 
 
-def shiftLeftAndRightNegatives(pasRow, allPAS, spacing, shiftValue):
-	width = pasRow['end'] - pasRow['start']
-	checkRange = width + shiftValue
-	leftStart = pas_start - shiftValue
-	leftEnd = pas_end - shiftValue
-	leftPassed = False
-	rightStart = pas_start - shiftValue
-	rightEnd = pas_end - shiftValue
-	rightPassed = False
-	#checking left
-	filterVals = (allPAS['strand'] == pasRow['strand']) & (allPAS['seqName'] == pasRow['seqName']) & (allPAS['end'] >= pasRow['start'] - checkRange) & (allPAS['end'] <= pasRow['end'])
-	otherPAS = allPAS[filterVals]
-	if otherPAS.shape[0] == 1: 
-		#left false is okay
-		leftPassed = True
-	filterVals = (allPAS['strand'] == pasRow['strand']) & (allPAS['seqName'] == pasRow['seqName']) & (allPAS['start'] <= pasRow['end'] + checkRange) & (allPAS['start'] >= pasRow['start'])
-	otherPAS = allPAS[filterVals]
-	if otherPAS.shape[0] == 1:
-		#passed 
-		rightPassed = True
-	return leftPassed, leftStart, leftEnd, rightPassed, rightStart, rightEnd
+
+
+#fails the pos signal if there are "N" in the true region, or in the region used to predict the true pas region [start - 205, end + 205]
+def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, spacingValue, shiftValue, fastaSeq, strictNFiltering = True, strictFilteringValue = 205):
+	#following Leung et al's true negative rules, count it as a negative if it can be shifted 50 nts and still fit four multiples of the negative region between it and the next polyA signal
+	#filtering positive signals for sequences with N's
+	sliceStart = pasRow['start'] - strictFilteringValue
+	if sliceStart < 0:
+		sliceStart = 0 #if the PAS occurs at the very beginning of the sequence correct for this
+	sliceEnd = pasRow['end'] + strictFilteringValue
+	if sliceEnd > len(fastaSeq) -1:
+		sliceEnd = len(fastaSeq) -1 
+	filteringTrueSequence = fastaSeq[sliceStart:sliceEnd + 1] #remove string portion to test for true
+	countN = filteringTrueSequence.count("N")
+	if countN == 0:  
+		width = pasRow['end'] - pasRow['start']
+		checkRange = (width * spacingValue) + shiftValue
+		#  SET UP
+		leftStart = pasRow['start'] - shiftValue
+		leftEnd = pasRow['end'] - shiftValue
+		leftSliceStart = leftStart - strictFilteringValue
+		leftSliceEnd = leftEnd + strictFilteringValue
+		if leftSliceStart < 0 :
+			leftSliceStart = 0
+		if leftSliceEnd > len(fastaSeq) - 1:
+			leftSliceEnd = len(fastaSeq) - 1
+		leftSlice = fastaSeq[leftSliceStart: leftSliceEnd + 1]
+		leftNCount = leftSlice.count("N")
+		leftPassed = False
+		
+		rightStart = pasRow['start'] + shiftValue
+		rightEnd = pasRow['end'] + shiftValue
+		rightSliceStart = leftStart - strictFilteringValue
+		rightSliceEnd = leftEnd + strictFilteringValue
+		if rightSliceStart < 0 :
+			leftSliceStart = 0
+		if rightSliceEnd > len(fastaSeq) - 1:
+			leftSliceEnd = len(fastaSeq) - 1
+		rightSlice = fastaSeq[rightSliceStart:rightSliceEnd + 1]
+		rightNCount = rightSlice.count("N")
+		rightPassed = False
+		### LEFT
+		if leftNCount == 0:
+			leftCheck = pasRow['start'] - checkRange
+			filterVals1 = (allPAS['strand'] == pasRow['strand']) & (allPAS['seqName'] == pasRow['seqName']) & (allPAS['end'] >= leftCheck) & (allPAS['start'] >= leftCheck) & (allPAS['start'] < pasRow['start'])
+			filterVals2 = (allPAS['strand'] == pasRow['strand']) & (allPAS['seqName'] == pasRow['seqName']) & (allPAS['end'] >= leftCheck) & (allPAS['start'] <= leftCheck)
+			otherPAS1Left = allPAS[filterVals1]
+			otherPAS2Left = allPAS[filterVals2]
+			sumInForbiddenRange = otherPAS1Left.shape[0] + otherPAS2Left.shape[0]
+			if sumInForbiddenRange == 0: 
+				leftPassed = True
+		else:
+			print ("Sequence: ", leftSlice)
+			leftStart = -1
+			leftEnd = -1
+		#####
+		##### RIGHT 
+		if rightNCount ==0:
+			rightCheck = pasRow['end'] + checkRange
+			filterVals1 = (allPAS['strand'] == pasRow['strand']) & (allPAS['seqName'] == pasRow['seqName']) & (allPAS['start'] <= rightCheck) & (allPAS['end'] <= rightCheck) & (allPAS['start'] >= pasRow['end']) 
+			filterVals2 = (allPAS['strand'] == pasRow['strand']) & (allPAS['seqName'] == pasRow['seqName']) & (allPAS['start'] <= rightCheck) & (allPAS['end'] >= rightCheck)
+			otherPAS1Right = allPAS[filterVals1]
+			otherPAS2Right = allPAS[filterVals2]
+			sumInForbiddenRangeRight = otherPAS1Right.shape[0] + otherPAS2Right.shape[0]
+			if sumInForbiddenRangeRight == 0:
+				rightPassed = True
+		else:
+			print ("Sequence: ", rightSlice)
+			rightStart = -1
+			rightEnd = -1
+		#####
+		'''
+		if not rightPassed and not leftPassed:
+			print ("---------------------------------")
+			print (pasRow)
+			print ("RANGE :", leftCheck, " ", rightCheck)
+			print ("LEFT: ")
+			print (otherPAS1Left)
+			print (otherPAS2Left)
+			print ("RIGHT: ")
+			print (otherPAS1Right)
+			print (otherPAS2Right)
+			print ("----------------------------------")
+		'''
+		return leftPassed, leftStart, leftEnd, rightPassed, rightStart, rightEnd
+	else:
+		print ("Sequence: ", filteringTrueSequence)
+		return False, -2, -2, False, -2, -2
+	
+
+def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq):
+	#create dictionary for negative valeus left and right 
+	#["seqName",  "start" , "end",  "clusterID",  "avgTPM",  "strand",   "percentSupporting",   "protocolsSupporting",  "avgTPM2",   "type",   "upstreamClusters"]
+	blankDict = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
+	copyTrueValues = trueVals.copy(deep = True) #make deep copy of dataframe
+	numberFailedBoth = 0
+	passedBoth = 0
+	passedLeftOnly = 0
+	passedRightOnly = 0
+	total = 0
+	for index, row in trueVals.iterrows():
+		total += 1
+		leftPassed, leftStart, leftEnd, rightPassed, rightStart, rightEnd = shiftLeftAndRightNegativesFilterPositives(row, trueVals, spacingValue, shiftValue, fastaSeq)
+		if leftPassed:
+			blankDict['seqName'].append(row['seqName'])
+			blankDict['start'].append(leftStart)
+			blankDict['end'].append(leftEnd)
+			newID = row['clusterID'] + "_LeftNegative"
+			blankDict['clusterID'].append(newID)
+			blankDict['strand'].append(row['strand'])
+			blankDict['type'].append(row['type'])
+			blankDict['side'].append("Left")
+		if rightPassed:
+			blankDict['seqName'].append(row['seqName'])
+			blankDict['start'].append(rightStart)
+			blankDict['end'].append(rightEnd)
+			newID = row['clusterID'] + "_RightNegative"
+			blankDict['clusterID'].append(newID)
+			blankDict['strand'].append(row['strand'])
+			blankDict['type'].append(row['type'])
+			blankDict['side'].append("Right")
+		if leftStart == leftEnd == -1:
+			print ("Failed due to N's in left sequence")
+		if rightStart == rightEnd == -1:
+			print ("Failed due to N's in right sequence")
+		if leftStart == leftEnd == rightStart == rightEnd == -2:
+			print ("Failed due to N's in true positive sequence")	
+		if leftPassed and rightPassed:
+			passedBoth += 1
+		if leftPassed and not rightPassed:
+			passedLeftOnly += 1
+		if rightPassed and not leftPassed:
+			passedRightOnly += 1
+		if not leftPassed and not rightPassed:
+			numberFailedBoth += 1
+			#delete the row from the copy
+			copyTrueValues.drop(index = index, inplace = True)
+			print ("DROPPED: ", row['clusterID'])
+	print ("total rows: ", total)
+	print ("True positives remaining: ", total - numberFailedBoth)
+	print ("Number with left and right negatives: ", passedBoth)
+	print ("Number with only left negative: ", passedLeftOnly)
+	print ("Number with only right negative: ", passedRightOnly)
+	#print ("total negatives: ", total)
+	asDataFrame = pd.DataFrame(blankDict)
+	filteredTrueName = fileName + "BalancedPositives.csv"
+	balancedNegatives = fileName + "BalancedNegatives.csv"
+	copyTrueValues.to_csv(filteredTrueName)
+	asDataFrame.to_csv(balancedNegatives)
+	
+
+
+def openForwardReverse(stem, name):
+	totalNameFor = stem + name + ".npy"
+	print (totalNameFor)
+	forward = np.load(totalNameFor)
+	reverse = np.load(stem + name + "RC.npy")
+	return forward, reverse
+
+def openBalancedNegatives(name):
+	negativesName = name + "BalancedNegatives.csv"
+	colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
+	return pd.read_csv( negativesName, names = colnames, dtype = {"seqName": str}) 
+
+def openBalancedPositives(name):
+	positivesName = name + "BalancedPositives.csv"
+	colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
+	return pd.read_csv( positivesName, names = colnames, dtype = {"seqName": str}) 
+	
+def extractPredictionValues(name):
+	dummy = []
+	dummyBools = []
+	#contigSeq = SeqIO.read("chrY.fasta", "fasta")
+	forward, reverse = openForwardReverse("", "chrY")
+	for index, row in negatives.iterrows():
+		if row['strand'] == "+":
+			#forward strand
+			#negatives are 0-indexed still
+			dummy = 0
+		elif row['strand'] == "-":
+			dummy = 0
+		else:
+			print ("ERROR!  Strand not listed for negative example")
+		
+#trying to make Negatives:
+openedPAS = openPASClustersForChromosome("Y")
+#print (openedPAS)
+contigSeq = SeqIO.read("chrY.fasta", "fasta")
+
+print ("1: ")
+createNegativeDataSet(openedPAS, 1, 50, "chrYNegatives", contigSeq.seq)
+
+#print ("1 w/25:")
+#createNegativeDataSet(openedPAS, 1, 25, "chrYNegatives.csv")
+#print ("1 w/20")
+#createNegativeDataSet(openedPAS, 1, 20, "chrYNegatives.csv")
+	
+
 
 
 

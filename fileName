@@ -1,0 +1,5 @@
+,seqName,start,end,clusterID,strand,type,side
+0,Y,2786905,2786907,Y:2786856:-_RightNegative,-,TE,Right
+1,Y,2844216,2844226,Y:2844176:+_RightNegative,+,EX,Right
+2,Y,56822580,56822581,Y:56822631:-_LeftNegative,-,IG,Left
+3,Y,56856615,56856616,Y:56856666:+_LeftNegative,+,IG,Left
