@@ -1,23 +1,11 @@
 import matplotlib.pyplot as plt
 import matplotlib.colors as clr
+import numpy as np
 from matplotlib.patches import Patch, Circle
 from operator import itemgetter
 import random
 
-'''
-class ExonDiagram(object):
-	def __init__(self, exons, diagramTitle):
-		self.exons = exons
-		self.diagramTitle = diagramTitle
-		self._sortExons()
-	
-	def _sortExons(self):
-		#sorts exons by earliest starting position 
-		self.exons.sort(key = itemgetter(0))
-		print (self.exons)
-		
-'''			
-		
+
 
 class SpliceVariantPASDiagram(object):
 	
@@ -254,7 +242,17 @@ class MultiGeneVariantPASDiagram(object):
 			
 			
 				
-	def __init__(self, transcript_positions, transcript_names, gene_names, gene_positions,  gene_strands, gene_colors = [], pas_pos=[], pas_types = [], startOverride = 0, stopOverride = 0, marker_heights=[], marker_size=100, marker_weight=1.5, intron_color="gray", intron_weight=1, intron_style='-', bar_color='gray', bg_color="white", diagramTitle = "", dropDownPASMarkers = True):
+	def __init__(self, transcript_positions, transcript_names, gene_names, gene_positions,  gene_strands, gene_colors = [], pas_pos=[], pas_types = [], startOverride = 0, stopOverride = 0, marker_heights=[], marker_size=100, marker_weight=1.5, intron_color="gray", intron_weight=1, intron_style='-', bar_color='gray', bg_color="white", diagramTitle = "", dropDownPASMarkers = True, sequence = "", forwardValues = [], reverseValues = [], forwardPeaks = [], reversePeaks = []):
+		#chromosome sequence 
+		self.sequence = sequence #used to show location of N's on axis line
+		self.forwardCleavagePredictions = forwardValues 
+		self.reverseCleavagePredictions = reverseValues
+		self.forwardPeaks = forwardPeaks
+		self.reversePeaks = reversePeaks
+		if forwardValues != [] and reverseValues != []:
+			self.yValStart = 3
+		else:
+			self.yValStart = 1	
 		###transcripts
 		self.numberGenes = len(gene_names) #number of splice variants on Ensembl for the gene 
 		self.transcriptPositions = transcript_positions
@@ -395,6 +393,27 @@ class MultiGeneVariantPASDiagram(object):
 			self.canvas.add_artist(l2)
 			#ax.legend(loc='center left', bbox_to_anchor=(1, 0.5)))
 			
+			
+	def _draw_Peak_Markers(self, yMax):
+		#print ("forward peaks: ", self.forwardPeaks)
+		#print ("reverse peaks: ", self.reversePeaks)
+		for p in self.forwardPeaks: #for each marker make a bar and then place a scatter plot dot on the bar
+			#print (p)
+			p = p + self.smallestIndex #go from 0 indexing to 1 indexing
+			h = -0.25
+			if self.dropDownPASMarkers:
+				h = 0.55 * yMax * (-1)
+			self.canvas.plot((p, p), (0, h), linestyle='-', color='black', linewidth=self.MarkerWeight)
+		for p in self.reversePeaks: #for each marker make a bar and then place a scatter plot dot on the bar
+			#print (p)
+			p = p + self.smallestIndex #go from 0 indexing to 1 indexing 
+			h = 0.25 
+			if self.dropDownPASMarkers:
+				h = 0.55 * yMax 
+			self.canvas.plot((p, p), (0, h), linestyle='-', color='black', linewidth=self.MarkerWeight)
+			
+			
+			
 	#place markers between smallest/largest
 	def _clean_axes(self):
 		self.canvas.set_yticks([], []) #hides all y-axis ticks
@@ -429,8 +448,27 @@ class MultiGeneVariantPASDiagram(object):
 			#make legend of genes
 			patches.append(Patch(facecolor = self.geneColors[g], edgecolor = self.geneColors[g], label = self.geneNames[g]))	
 		self.canvas.legend(handles=patches, bbox_to_anchor=(0.5, -0.05), loc = 'upper center', ncol = self.numberGenes)
-        		
-        		
+
+
+	def _dotNPositionsOnAxis(self):
+		nPositions = [i for i, ltr in enumerate(self.sequence) if ltr == "N"]
+		for position in nPositions:
+			self.canvas.scatter(0, position + 1, marker = 'o', c = 'red')
+
+
+
+	def _plotPredictions(self):
+		xAxis = list(range(self.smallestIndex, self.largestIndex + 1))
+		#print ("xaxis: ", len(xAxis))
+		#print ("forward: ", self.forwardCleavagePredictions.size)
+		#print ("reverse: ", self.reverseCleavagePredictions.size)
+		if self.forwardCleavagePredictions != []:
+			fixedForward = self.yValStart * self.forwardCleavagePredictions * -1 
+			self.canvas.plot(xAxis, fixedForward)
+		if self.reverseCleavagePredictions != []:
+			fixedReverse = self.yValStart * self.reverseCleavagePredictions
+			self.canvas.plot(xAxis, fixedReverse)
+		
 	def _draw(self):
 		self._set_limits() #setting y values for the intron lines and the overhead bar in the graph
 		#if self.thickenExons:
@@ -438,7 +476,7 @@ class MultiGeneVariantPASDiagram(object):
 		maxY = float('-inf')
 		for k in range(0,self.numberGenes):
 			transcriptsNow = self.transcriptPositions[k]
-			yValStart = 1
+			yValStart = self.yValStart
 			for j in range(0,len(transcriptsNow)):
 				currentExonColor = self.geneColors[k]
 				currentExons = transcriptsNow[j]
@@ -461,9 +499,14 @@ class MultiGeneVariantPASDiagram(object):
 				maxY = yValStart		
 		
 		self.canvas.plot([self.smallestIndex, self.largestIndex], [0,0], c='black', lw=self.intronWeight, ls=self.intronStyle)
+		if self.sequence != "":
+			self._dotNPositionsOnAxis()
+		if self.yValStart != 1:
+			self._plotPredictions()
 		if self.diagramTitle:
 			plt.title(self.diagramTitle)
 		self._draw_markers(maxY) #draw markers with the default color for the diagram instance
+		self._draw_Peak_Markers(maxY)
 		self._drawGeneBoundaries(maxY)
 		self._clean_axes()
 

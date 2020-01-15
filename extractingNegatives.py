@@ -7,8 +7,13 @@
  #shift left and right by 50 nts but still within the region boundaries 
  
 import pyensembl
+import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd 
+import sklearn.metrics as metrics
 from Bio import SeqIO
+import random
+import time
 
 #Note: Ensembl is 1-based, polyAsite is 0-based
 
@@ -129,6 +134,7 @@ print (row1['type'])
 def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, spacingValue, shiftValue, fastaSeq, strictNFiltering = True, strictFilteringValue = 205):
 	#following Leung et al's true negative rules, count it as a negative if it can be shifted 50 nts and still fit four multiples of the negative region between it and the next polyA signal
 	#filtering positive signals for sequences with N's
+	
 	sliceStart = pasRow['start'] - strictFilteringValue
 	if sliceStart < 0:
 		sliceStart = 0 #if the PAS occurs at the very beginning of the sequence correct for this
@@ -175,7 +181,7 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, spacingValue, shif
 			if sumInForbiddenRange == 0: 
 				leftPassed = True
 		else:
-			print ("Sequence: ", leftSlice)
+			print ("Sequence rejected on left negative: ", leftSlice)
 			leftStart = -1
 			leftEnd = -1
 		#####
@@ -190,7 +196,7 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, spacingValue, shif
 			if sumInForbiddenRangeRight == 0:
 				rightPassed = True
 		else:
-			print ("Sequence: ", rightSlice)
+			print ("Sequence rejected on right negative: ", rightSlice)
 			rightStart = -1
 			rightEnd = -1
 		#####
@@ -209,7 +215,7 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, spacingValue, shif
 		'''
 		return leftPassed, leftStart, leftEnd, rightPassed, rightStart, rightEnd
 	else:
-		print ("Sequence: ", filteringTrueSequence)
+		print ("Sequence rejected on positive region: ", filteringTrueSequence)
 		return False, -2, -2, False, -2, -2
 	
 
@@ -217,12 +223,14 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 	#create dictionary for negative valeus left and right 
 	#["seqName",  "start" , "end",  "clusterID",  "avgTPM",  "strand",   "percentSupporting",   "protocolsSupporting",  "avgTPM2",   "type",   "upstreamClusters"]
 	blankDict = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
+	balancedDict = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
 	copyTrueValues = trueVals.copy(deep = True) #make deep copy of dataframe
 	numberFailedBoth = 0
 	passedBoth = 0
 	passedLeftOnly = 0
 	passedRightOnly = 0
 	total = 0
+	random.seed()
 	for index, row in trueVals.iterrows():
 		total += 1
 		leftPassed, leftStart, leftEnd, rightPassed, rightStart, rightEnd = shiftLeftAndRightNegativesFilterPositives(row, trueVals, spacingValue, shiftValue, fastaSeq)
@@ -252,10 +260,46 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 			print ("Failed due to N's in true positive sequence")	
 		if leftPassed and rightPassed:
 			passedBoth += 1
+			#chose one to store
+			randInt = random.randint(0,1)
+			if randInt == 0: #left
+				balancedDict['seqName'].append(row['seqName'])
+				balancedDict['start'].append(leftStart)
+				balancedDict['end'].append(leftEnd)
+				newID = row['clusterID'] + "_LeftNegative"
+				balancedDict['clusterID'].append(newID)
+				balancedDict['strand'].append(row['strand'])
+				balancedDict['type'].append(row['type'])
+				balancedDict['side'].append("Left")
+			else:
+				balancedDict['seqName'].append(row['seqName'])
+				balancedDict['start'].append(rightStart)
+				balancedDict['end'].append(rightEnd)
+				newID = row['clusterID'] + "_RightNegative"
+				balancedDict['clusterID'].append(newID)
+				balancedDict['strand'].append(row['strand'])
+				balancedDict['type'].append(row['type'])
+				balancedDict['side'].append("Right")
 		if leftPassed and not rightPassed:
 			passedLeftOnly += 1
+			balancedDict['seqName'].append(row['seqName'])
+			balancedDict['start'].append(leftStart)
+			balancedDict['end'].append(leftEnd)
+			newID = row['clusterID'] + "_LeftNegative"
+			balancedDict['clusterID'].append(newID)
+			balancedDict['strand'].append(row['strand'])
+			balancedDict['type'].append(row['type'])
+			balancedDict['side'].append("Left")
 		if rightPassed and not leftPassed:
 			passedRightOnly += 1
+			balancedDict['seqName'].append(row['seqName'])
+			balancedDict['start'].append(rightStart)
+			balancedDict['end'].append(rightEnd)
+			newID = row['clusterID'] + "_RightNegative"
+			balancedDict['clusterID'].append(newID)
+			balancedDict['strand'].append(row['strand'])
+			balancedDict['type'].append(row['type'])
+			balancedDict['side'].append("Right")
 		if not leftPassed and not rightPassed:
 			numberFailedBoth += 1
 			#delete the row from the copy
@@ -266,12 +310,16 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 	print ("Number with left and right negatives: ", passedBoth)
 	print ("Number with only left negative: ", passedLeftOnly)
 	print ("Number with only right negative: ", passedRightOnly)
+	print ("Number balanced negatives: ", len(balancedDict['seqName']))
 	#print ("total negatives: ", total)
 	asDataFrame = pd.DataFrame(blankDict)
+	balancedAsDataFrame = pd.DataFrame(balancedDict)
 	filteredTrueName = fileName + "BalancedPositives.csv"
+	allNegatives = fileName + "AllNegatives.csv"
 	balancedNegatives = fileName + "BalancedNegatives.csv"
 	copyTrueValues.to_csv(filteredTrueName)
-	asDataFrame.to_csv(balancedNegatives)
+	asDataFrame.to_csv(allNegatives)
+	balancedAsDataFrame.to_csv(balancedNegatives)
 	
 
 
@@ -282,43 +330,196 @@ def openForwardReverse(stem, name):
 	reverse = np.load(stem + name + "RC.npy")
 	return forward, reverse
 
+def openAllNegatives(name):
+	negName = name + "AllNegatives.csv"
+	#colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
+	return pd.read_csv( negativesName,  dtype = {"seqName": str}) 
+
 def openBalancedNegatives(name):
 	negativesName = name + "BalancedNegatives.csv"
-	colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
-	return pd.read_csv( negativesName, names = colnames, dtype = {"seqName": str}) 
+	#colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
+	return pd.read_csv( negativesName, dtype = {"seqName": str}) 
 
 def openBalancedPositives(name):
 	positivesName = name + "BalancedPositives.csv"
-	colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
-	return pd.read_csv( positivesName, names = colnames, dtype = {"seqName": str}) 
+	#colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
+	return pd.read_csv( positivesName, dtype = {"seqName": str}) 
 	
-def extractPredictionValues(name):
-	dummy = []
-	dummyBools = []
-	#contigSeq = SeqIO.read("chrY.fasta", "fasta")
-	forward, reverse = openForwardReverse("", "chrY")
+def extractPredictionValues(name, negatives, positives):
+	#making a sklearn AUC and AUPRC plot to look at different threshold values
+	dummy = np.array([])
+	dummybools = np.array([])
+	predName = "chr" + name
+	forward, reverse = openForwardReverse("", predName)
+	flippedReverse = np.flip(reverse)
 	for index, row in negatives.iterrows():
+		startInt = int(row['start'])
+		endInt = int(row['end'])
 		if row['strand'] == "+":
 			#forward strand
 			#negatives are 0-indexed still
-			dummy = 0
+			sliceVals = forward[startInt:endInt+ 1]
+			dummy = np.concatenate((dummy,sliceVals))
+			dummybools = np.concatenate((dummybools, np.zeros(sliceVals.size)))
 		elif row['strand'] == "-":
-			dummy = 0
+			#reverse strand
+			sliceVals = flippedReverse[startInt: endInt + 1]
+			dummy = np.concatenate((dummy,sliceVals))
+			dummybools = np.concatenate((dummybools, np.zeros(sliceVals.size)))
 		else:
 			print ("ERROR!  Strand not listed for negative example")
+	for index,row in positives.iterrows():
+		startInt = int(row['start'])
+		endInt = int(row['end'])
+		if row['strand'] == "+":
+			#forward strand
+			#negatives are 0-indexed still
+			sliceVals = forward[startInt:endInt+ 1]
+			dummy = np.concatenate((dummy,sliceVals))
+			dummybools = np.concatenate((dummybools, np.ones(sliceVals.size)))
+		elif row['strand'] == "-":
+			#reverse strand
+			flippedReverse = flippedReverse[startInt: endInt + 1]
+			dummy = np.concatenate((dummy,sliceVals))
+			dummybools = np.concatenate((dummybools, np.ones(sliceVals.size)))
+		else:
+			print ("ERROR!  Strand not listed for negative example")
+	return dummybools, dummy
+
+def maxPosDist45DegreeLine(fpr,tpr, threshs):
+	#fpr is x, tpr is y
+	#find the fpr,tpr,and threshold of the ROC point with the maximum positive distance from the 45 degree line
+	maxPosDist = -1
+	maxIndex = 0
+	for i in range(0,len(fpr)):
+		if tpr[i] >=fpr[i]: #above or on the 45 degree line
+			currPosDist = tpr[i] - fpr[i] #since 45 degree line is y=x
+			if currPosDist >= maxPosDist:
+				maxPosDist = currPosDist 
+				maxIndex = i
+	if maxPosDist == -1:
+		return None
+	else:
+		return fpr[maxIndex], tpr[maxIndex], threshs[maxIndex], maxPosDist
+
+
+def findSpecifictySensitivityEqualityPoint(fpr,tpr,threshs):
+	#find the prediction closest to where sensitivity=specificity
+	minDiff = math.sqrt(2) #maximum possible distance for the unit cube of the ROC curve
+	minIndex = 0
+	for i in range(0,len(fpr)):
+		if fpr[i] != 0.0 and tpr[i] != 0.0: #will always choose (0,0) if not blocked from doing so
+			se = tpr[i]
+			sp = 1 - fpr[i]
+			currDiff = math.fabs(se-sp)
+			if currDiff < minDiff:
+				minDiff = currDiff
+				minIndex = i
+	if minDiff != math.sqrt(2):
+		return fpr[minIndex], tpr[minIndex], threshs[minIndex], minDiff
+	else:
+		return None
+    
+def minDistanceTopLeftCorner(fpr,tpr,threshs):
+	#find the prediction closest to (1,1)
+	minDist = math.sqrt(2) #maximum possible distance for the unit cube of the ROC curve
+	minIndex = 0
+	for i in range(0,len(fpr)):
+		currDist = math.sqrt((fpr[i])**2 + (1-tpr[i])**2)
+		#print (currDist)
+		if currDist < minDist:
+			minDist = currDist
+			minIndex = i
+	if minDist != math.sqrt(2):
+		return fpr[minIndex], tpr[minIndex], threshs[minIndex], minDist
+	else:
+		return None
+
+	
+def computeAndGraphAllROCs(trueValsArray, preds):
+	#set up true value labels
+	print ("Total true labelled positions: ", np.sum(trueValsArray))
+	######
+	#Compute ROC curve and ROC AUC for each stride length
+	fpr, tpr, thresholds = metrics.roc_curve(trueValsArray, preds)
+	prec, rec, thresholdsPR = metrics.precision_recall_curve(trueValsArray, preds)
+	auc_score = metrics.roc_auc_score(trueValsArray,preds)
+	auprc_score = metrics.average_precision_score(trueValsArray, preds)
+	#posDistFPR, posDistTPR, posDistThresh, x  = maxPosDist45DegreeLine(fpr,tpr,thresholds)
+	#equalFPR, equalTPR, equalThresh, x  = findSpecifictySensitivityEqualityPoint(fpr,tpr,thresholds)
+	#closeFPR, closeTPR, closeThresh, x  = minDistanceTopLeftCorner(fpr,tpr,thresholds)
+	return fpr,tpr,thresholds,auc_score, prec, rec, thresholdsPR, auprc_score
+
+
+
+
+
+def createBalancedDatasets(chroName, bufferRegions, spacings, fastaPath):
+	#open fasta
+	totalName = fastaPath + "chr" + chroName + ".fasta"
+	chroSeq = SeqIO.read(totalName, "fasta")
+	currentTime = time.time()
+	print ("___________________________________")
+	print ("FASTA OPENED: ")
+	print (chroSeq)
+	print ("___________________________________")
+	#open PAS
+	openPAS = openPASClustersForChromosome(chroName, pasType= "All") #making a csv which can be filtered for individual PAS types as needed
+	for s in spacings:
+		for b in bufferRegions:
+			print ("___________________________________")
+			currentTime = time.time()
+			fileName = "chro" + chroName + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
+			print ("generating balanced datasets for: ")
+			print (fileName)
+			createNegativeDataSet(openPAS, b, s, fileName, chroSeq.seq)
+			print ("___________________________________")
+			print ("elapsed time: ", time.time() - currnentTime)
+			print ("___________________________________")
+			print (" ")
+			
 		
+	
+	
+
+'''
 #trying to make Negatives:
-openedPAS = openPASClustersForChromosome("Y")
+openedPAS = openPASClustersForChromosome("21", pasType= "All")
 #print (openedPAS)
-contigSeq = SeqIO.read("chrY.fasta", "fasta")
-
+contigSeq = SeqIO.read("chr21.fasta", "fasta")
 print ("1: ")
-createNegativeDataSet(openedPAS, 1, 50, "chrYNegatives", contigSeq.seq)
+createNegativeDataSet(openedPAS, 1, 50, "chr21", contigSeq.seq)
+negatives =  openBalancedNegatives("chr21")
+print (negatives)
+positives = openBalancedPositives("chr21")
+print (positives)
+bools, vals = extractPredictionValues("21",negatives,positives)
+fpr,tpr,thresholds,auc_score, prec, rec, thresholdsPR, auprc_score = computeAndGraphAllROCs(bools, vals)
+print ("AUC Score: ", auc_score)
+print ("Avg Precision Score: ", auprc_score)
+plt.plot(fpr, tpr)
+plt.title("AUC 21")
+plt.show()
+plt.plot(prec, rec)
+plt.title("PR Curve 21")
+plt.show()
+'''
 
-#print ("1 w/25:")
-#createNegativeDataSet(openedPAS, 1, 25, "chrYNegatives.csv")
-#print ("1 w/20")
-#createNegativeDataSet(openedPAS, 1, 20, "chrYNegatives.csv")
+
+
+fastaPath = "./Desktop/aparentGenomeTesting/fastas/"
+#pasTypes = ['All', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU'] 
+bufferRegions = [1,4]
+spacing = [50]
+chromosomes = ["20", "21", "22", "X", "Y"]
+
+for c in chromosomes:
+	createBalancedDatasets(c, bufferRegions, spacing, fastaPath)
+
+
+
+
+
 	
 
 

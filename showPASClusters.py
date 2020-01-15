@@ -7,6 +7,8 @@ import pyensembl
 import pandas as pd
 from transcriptGraphing import SpliceVariantPASDiagram, MultiGeneVariantPASDiagram
 from Bio import SeqIO
+import numpy as np
+from scipy.signal import find_peaks
 
 #pulls current release version for the human genome
 ensembl = pyensembl.EnsemblRelease(release = '96')
@@ -139,21 +141,83 @@ def transformPyEnsemblToPASDiagram(geneList):
 		names.append(dummyNames)
 		geneNames.append(g.id + ": " + g.name + " "+ g.biotype)
 		genePositions.append([g.start,g.end])
-		print (g.start)
-		print (g.end)
+		#print (g.start)
+		#print (g.end)
 		geneStrands.append(g.strand)
 		geneAddress.append(g.name + " " + g.contig + ":" + str(g.start) + "-" + str(g.end) + "(" + g.strand + ")")
 	return positions, names, geneNames, genePositions, geneStrands, geneAddress
 
+
+def openForwardReverse(stem, name):
+	totalNameFor = stem + name + ".npy"
+	print (totalNameFor)
+	forward = np.load(totalNameFor)
+	reverse = np.load(stem + name + "RC.npy")
+	return forward, reverse
+
+
+#use to correct the indexes for the RC predictions so that they can be matched with the true cluster labels (since those are indexed according to the forward strand)
+def flipSequenceIndex(index, lenSeq):
+	b = lenSeq - 1
+	return -1 * index + b
+
+
+def find_peaks_ChromosomeVersion(avgPreds, peak_min_height, peak_min_distance, peak_prominence):
+	#forwardPeaks = find_peaks_ChromosomeVersion(forward, minh, dist, (0.01, None)) 
+	peaks, _ = find_peaks(avgPreds, height=peak_min_height, distance=peak_min_distance, prominence=peak_prominence) 
+	return peaks
+
 onChrY = openPASClustersForChromosome("Y")
 contigSeq = SeqIO.read("chrY.fasta", "fasta")
 print ("total length of chromosome Y: ", len(contigSeq.seq))
-auPAS = onChrY[onChrY['type'] == 'AU']
-print (onChrY)
-print (onChrY.shape[0])
+forwardY, reverseY = openForwardReverse("", "chrY")
+print ("size predictions: ", forwardY.size)
+reverseYFlipped = np.flip(reverseY)
+#examining areas with overlapping genes on chromosome Y
+notFoundTwo = True
+posCurrent = 0
+
+while notFoundTwo:
+	genesDemo = ensembl.genes_at_locus(contig = "Y", position = posCurrent)
+	if len(genesDemo) >= 1:
+		#print (posCurrent)
+		#print (genesDemo)		
+		p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesDemo)
+		start, stop = extractTotalSpanFromGenePositions(gp)
+		#print ("width of slice ", stop - start)
+		pasTable = findallPASClustersInRangeBothStrands(start, stop, onChrY)
+		genesRound2 = ensembl.genes_at_locus(contig = "Y", position = start, end = stop)
+		p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesRound2)
+		start, stop = extractTotalSpanFromGenePositions(gp)
+		#start and stop are 1-indexed, sequence and predictions are 0-indexed
+		seqSlice = contigSeq.seq[start-1:stop]
+		#print ("len seq: ", len(seqSlice))
+		predForwardSlice = forwardY[start-1:stop] #numpt array
+		#print ("forward: ", predForwardSlice.size)
+		predReverseSlice =  reverseYFlipped[start-1 :stop]
+		#print ("reverse: ", predReverseSlice.size)
+		#print (genesRound2)
+		#print (pasTable)
+		#print ("Using min H of 0.5")
+		preppedPASLocs, preppedPASTypes = PASClusterToListFormatDoubleStrand(pasTable)
+		peaksForward = find_peaks_ChromosomeVersion(predForwardSlice, 0.5, 50, (0.01, None))
+		peaksReverse  = find_peaks_ChromosomeVersion(predReverseSlice, 0.5, 50, (0.01, None))
+		#print ('forward peaks: ', peaksForward)
+		#print ('peaksReverse: ', peaksReverse)
+		if len(peaksForward) > 0 or len(peaksReverse) > 0 :
+			mgraph = MultiGeneVariantPASDiagram(p, tn, gn, gp,  gs, pas_pos= preppedPASLocs, pas_types = preppedPASTypes, sequence = seqSlice, forwardValues = predForwardSlice, reverseValues = predReverseSlice, forwardPeaks = peaksForward, reversePeaks = peaksReverse)
+			mgraph.show()
+		posCurrent += (stop - start)
+	else:
+		posCurrent += 1
+	if posCurrent >= len(contigSeq.seq):
+		notFoundTwo = False 
+
+
 
 
 '''
+#examining IG pas's on chromosome Y
 igPAS = onChrY[onChrY['type'] == 'IG']
 for i, row in igPAS.iterrows():
 	#graph genes around first AU PAS
@@ -179,6 +243,8 @@ for i, row in igPAS.iterrows():
 '''
 
 '''
+#examining AU pases on chromosome Y
+auPAS = onChrY[onChrY['type'] == 'AU']
 for i, row in auPAS.iterrows():
 	#graph genes around first AU PAS
 	print (row)
@@ -206,6 +272,7 @@ for i, row in auPAS.iterrows():
 
 
 '''
+#examining areas with overlapping genes on chromosome Y
 notFoundTwo = True
 posCurrent = 6900000
 while notFoundTwo:
