@@ -59,76 +59,6 @@ def openPASClustersForChromosome(name, pasType = 'All'):
 		maskedTrue = currentTrueVals[maskType]
 		return maskedTrue
 
-#create new dataframe with negative examples
-
-
-#save for later when verifying that new false negative falls in the region range
-
-'''
-
-def getLastTranscriptExon(transcript_strand, transcript_exons):
-	#extracts last exon coordinates from PyEnsembl transcript object
-	transcript_exons = sorted(transcript_exons)
-	if transcript_strand == "+":
-		return transcript_exons[-1]
-	else: 
-		return transcript_exons[0]
-
-def checkOtherExons(transcript_strand, transcript_exons, pas_start, pas_end):
-	winningRange = 0
-	case = 0
-	for trange in transcript_exons:
-		if pas_start >= trange[0] and pas_end <= trange[1]: #exact match
-			winningRange = trange
-			case = "exact match"
-			break
-		elif pas_start >= trange[0] and pas_start <= trange[1]: #start in range and end is not
-			winningRange = trange
-			case = "start match"
-		elif pas_end >= trange[0] and pas_end <= trange[1]: #end in range start is not
-			winningRange = trange
-			case = "end match"
-		else:
-			case = "no match"
-	return winningRange, case
-
-def doubleCheckIdentities(location, pas_type, pas_start, pas_end, pas_strand, pas_chromosome):
-	matches = False
-	newType = ""
-	genes_in_range = ensembl.genes_at_locus(contig = pas_chromosome, position = pas_start, end = pas_end)
-	for gene in genes_in_range:
-		for transcript in gene.transcripts:
-			exons = [[exon.start, exon.end] for exon in transcript.exons]
-			last_exon = getLastTranscriptExon(transcript.strand, exons)
-			if pas_start >= last_exon[0] and pas_end <= pas_end:
-				newType = "TE"
-			else:
-				#check other exon
-				if 
-	if pas_type == "TE":
-		#find the exon that it is in
-
-		
-	elif pas_type == "EX":
-	elif pas_type == "IN":
-	elif pas_type == "DS":
-	elif pas_type == "AE":
-	elif pas_type == "AI":
-	elif pas_type == "AU":
-	elif pas_type == "IG":
-	else:
-		print ("error!!!! Invalid PAS type")
-		
-'''
-'''
-print (auPAS.iloc[0])
-row1 = auPAS.iloc[0]
-print (row1)
-print (row1['type'])
-
-'''
-
-
 
 
 #fails the pos signal if there are "N" in the true region, or in the region used to predict the true pas region [start - 205, end + 205]
@@ -605,52 +535,133 @@ def createBalancedDatasets(chroName, bufferRegions, spacings, fastaPath):
 			
 		
 		
+def placePeaksWithTolerance(peaks, clusters, tolerance, sign, lenSeq):
+	clusterRanges = clusters.keys()
+	for peak in peaks:
+		if sign == "-":
+			peak = flipSequenceIndex(peak, lenSeq)
+		placed = False
+		for rng in clusterRanges:
+			if rng != 'Unplaced':
+				lower = rng[0] - tolerance
+				upper = rng[1] + tolerance
+				if peak >= lower and peak <= upper: #if the peak is in [start, end]
+					clusters[rng].append(peak)
+					placed = True
+					break
+		if not placed: #wasn't placed
+			clusters['Unplaced'].append(peak)
+	return clusters
+
+
+#using the peak-cluster dictionaries 
+#need to count TP, FP, FN (placed peaks, unplaced peaks, empty clusters)
+def fillConfMatrix(dictForward, dictRC):
+	countTP = 0 #peaks in true cluster
+	countFP = 0 #peak in false cluster 
+	countFN = 0 #no peak in true cluster
+	countTN = 0 #no peak in false cluster
+	for key in dictForward:
+		if key != 'Unplaced':
+			inCluster = len(dictForward[key])
+			if inCluster != 0:
+				countTP += inCluster
+				#print (key, " contains: ", inCluster)
+			else:
+				countFN += 1
+		else: #unplaced peaks
+			countFP += len(dictForward[key])
+	for key in dictRC:
+		if key != 'Unplaced':
+			inCluster = len(dictRC[key])
+			if inCluster != 0:
+				countTP += inCluster
+				#print (key, " contains: ", inCluster)
+			else:
+				countFN += 1
+		else: #unplaced peaks
+			countFP += len(dictRC[key])
+	return countTP, countFP, countFN
+	
+def calculatePrecisionRecall(tp, fp, fn):
+	precision = tp / (tp + fp)
+	recall = tp / (tp + fn)
+	if tp == 0:
+		return precision, recall, None
+	else: 
+		f1 =  (2 * (precision * recall))/(precision + recall)
+	return precision, recall, f1
+	
+
+#creates forward and reverse strand dictionaries for the balanced dataset given to it
+def openBalancedValuesForType(name, toSeparate, pasType):
+	clustersForward = {}
+	clustersRC = {} #key of (Start, End) will use to track clusters with no peaks for the FN  
+	if pasType == "All":
+		for index, row in toSeparate.iterrows():
+			if row['strand'] == "+": #forward strand
+				clustersForward[(row['start'], row['end'])] = []
+			else: #negative strand, RC cluster
+				clustersRC[(row['start'], row['end'])] = []
+		clustersForward['Unplaced'] = []
+		clustersRC['Unplaced'] = []
+	else:
+		
+		maskType = toSeparate["type"] == pasType
+		maskedTrue = toSeparate[maskType]
+		for index, row in maskedTrue.iterrows():
+			if row['strand'] == "+": #forward strand
+				clustersForward[(row['start'], row['end'])] = []
+			else: #negative strand, RC cluster
+				clustersRC[(row['start'], row['end'])] = []
+		clustersForward['Unplaced'] = []
+		clustersRC['Unplaced'] = []
+	#print (clustersForward)	
+	return clustersForward, clustersRC
+
+
+def buildConfidenceMatrix(name, pasType, stem, b, s):
+	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
+	balancedPositives = openBalancedPositives(fileName)
+	balancedNegatives = openBalancedNegatives(fileName)
+	
+
 
 	
 	
 
-'''
-#trying to make Negatives:
-openedPAS = openPASClustersForChromosome("21", pasType= "All")
-#print (openedPAS)
-contigSeq = SeqIO.read("chr21.fasta", "fasta")
-print ("1: ")
-createNegativeDataSet(openedPAS, 1, 50, "chr21", contigSeq.seq)
-negatives =  openBalancedNegatives("chr21")
-print (negatives)
-positives = openBalancedPositives("chr21")
-print (positives)
-bools, vals = extractPredictionValues("21",negatives,positives)
-fpr,tpr,thresholds,auc_score, prec, rec, thresholdsPR, auprc_score = computeAndGraphAllROCs(bools, vals)
-print ("AUC Score: ", auc_score)
-print ("Avg Precision Score: ", auprc_score)
-plt.plot(fpr, tpr)
-plt.title("AUC 21")
-plt.show()
-plt.plot(prec, rec)
-plt.title("PR Curve 21")
-plt.show()
-'''
+def makeNegativeDatasetsForGenome():
+	fastaPath = "../../aparentGenomeTesting/fastas/"
+	bufferRegions = [1,4]
+	spacing = [ 50, 75, 100]
+	chromosomes = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"]
+	for c in chromosomes:
+		createBalancedDatasets(c, bufferRegions, spacing, fastaPath)
 
 
-'''
-fastaPath = "../../aparentGenomeTesting/fastas/"
-bufferRegions = [1,4]
-spacing = [ 50, 75, 100]
-chromosomes = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"]
-for c in chromosomes:
-	createBalancedDatasets(c, bufferRegions, spacing, fastaPath)
-'''
-values, bools = extractAllPredictionValues(["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "Y"], "./datasets/", 1, 50, "IN")
-fpr,tpr,thresholds,auc_score, prec, rec, thresholdsPR, auprc_score = computeAndGraphAllROCs(bools, values)
-print ("AUC Score: ", auc_score)
-print ("Avg Precision Score: ", auprc_score)
-plt.plot(fpr, tpr)
-plt.title("AUC All But X IN")
-plt.show()
-plt.plot(prec, rec)
-plt.title("PR Curve All but X IN")
-plt.show()
+def makeNegativeDatasetsForOneChromosome(chroName):
+	fastaPath = "../../aparentGenomeTesting/fastas/"
+	bufferRegions = [1,4]
+	spacing = [ 50, 75, 100]
+	createBalancedDatasets([chroName], bufferRegions, spacing, fastaPath)
+	
+def makeGraphsAverageCleavageValues(b = 1, s = 50, typePas = ""):
+	chromosomes = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "Y"]
+	values, bools = extractAllPredictionValues(chromosomes, "./datasets/", b, s, typePas)
+	fpr,tpr,thresholds,auc_score, prec, rec, thresholdsPR, auprc_score = computeAndGraphAllROCs(bools, values)
+	print ("AUC Score: ", auc_score)
+	print ("Avg Precision Score: ", auprc_score)
+	plt.plot(fpr, tpr)
+	plt.title("AUC All But X IN")
+	plt.show()
+	plt.plot(prec, rec)
+	plt.title("PR Curve All but X IN")
+	plt.show()
+	
+
+
+	
+
 
 
 
