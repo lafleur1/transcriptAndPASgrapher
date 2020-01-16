@@ -1,0 +1,16 @@
+total rows: 18764
+True positives remaining: 17417
+Number with left and right negatives: 12706
+Number with only left negative: 2352
+Number with only right negative: 2359
+Number balanced negatives: 17417
+Positives dropped: 
+dropped 0 of type All
+dropped 115 of type IN
+dropped 1026 of type TE
+dropped 28 of type IG
+dropped 33 of type AI
+dropped 38 of type EX
+dropped 58 of type DS
+dropped 47 of type AE
+dropped 2 of type AU

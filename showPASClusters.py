@@ -179,7 +179,7 @@ posCurrent = 0
 
 while notFoundTwo:
 	genesDemo = ensembl.genes_at_locus(contig = "Y", position = posCurrent)
-	if len(genesDemo) >= 1:
+	if len(genesDemo) > 1:
 		#print (posCurrent)
 		#print (genesDemo)		
 		p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesDemo)
@@ -200,8 +200,8 @@ while notFoundTwo:
 		#print (pasTable)
 		#print ("Using min H of 0.5")
 		preppedPASLocs, preppedPASTypes = PASClusterToListFormatDoubleStrand(pasTable)
-		peaksForward = find_peaks_ChromosomeVersion(predForwardSlice, 0.5, 50, (0.01, None))
-		peaksReverse  = find_peaks_ChromosomeVersion(predReverseSlice, 0.5, 50, (0.01, None))
+		peaksForward = find_peaks_ChromosomeVersion(predForwardSlice, 0.1, 50, (0.01, None))
+		peaksReverse  = find_peaks_ChromosomeVersion(predReverseSlice, 0.1, 50, (0.01, None))
 		#print ('forward peaks: ', peaksForward)
 		#print ('peaksReverse: ', peaksReverse)
 		if len(peaksForward) > 0 or len(peaksReverse) > 0 :
@@ -303,25 +303,6 @@ while notFoundTwo:
 
 '''
 
-
-
-'''
-
-#errors in database???
-id1 = "Y:6919894:+"
-genes = ensembl.genes_at_locus(contig = "Y", position = 6919894)
-print (genes)
-id2 = "Y:6920421:+"
-genes = ensembl.genes_at_locus(contig = "Y", position = 6919894)
-print (genes)
-id3 = "Y:6920474:+"
-genes = ensembl.genes_at_locus(contig = "Y", position = 6919894)
-print (genes)
-id4 = "Y:7102025:+"
-genes = ensembl.genes_at_locus(contig = "Y", position = 6919894)
-print (genes)
-#graphGeneandPAS(genesDemo[0], onChrY)
-'''
 #finding gene with most PAS signals contained
 '''
 gene_ids = ensembl.gene_ids()

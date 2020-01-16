@@ -14,6 +14,7 @@ import sklearn.metrics as metrics
 from Bio import SeqIO
 import random
 import time
+import math
 
 #Note: Ensembl is 1-based, polyAsite is 0-based
 
@@ -224,6 +225,7 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 	#["seqName",  "start" , "end",  "clusterID",  "avgTPM",  "strand",   "percentSupporting",   "protocolsSupporting",  "avgTPM2",   "type",   "upstreamClusters"]
 	blankDict = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
 	balancedDict = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
+	droppedTypeList = []
 	copyTrueValues = trueVals.copy(deep = True) #make deep copy of dataframe
 	numberFailedBoth = 0
 	passedBoth = 0
@@ -304,19 +306,32 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 			numberFailedBoth += 1
 			#delete the row from the copy
 			copyTrueValues.drop(index = index, inplace = True)
-			print ("DROPPED: ", row['clusterID'])
+			print ("DROPPED: ", row['clusterID'], " ", row['type'])
+			droppedTypeList.append(row['type'])
+	report = open("./reports/" + fileName + "DatasetsReport.txt", "w")
 	print ("total rows: ", total)
+	report. write ("total rows: " + str(total) + "\n")
 	print ("True positives remaining: ", total - numberFailedBoth)
+	report.write("True positives remaining: " + str(total - numberFailedBoth) + "\n")
 	print ("Number with left and right negatives: ", passedBoth)
+	report.write("Number with left and right negatives: "+ str(passedBoth) + "\n")
 	print ("Number with only left negative: ", passedLeftOnly)
+	report.write("Number with only left negative: " + str(passedLeftOnly) + "\n")
 	print ("Number with only right negative: ", passedRightOnly)
+	report.write("Number with only right negative: " + str(passedRightOnly) + "\n")
 	print ("Number balanced negatives: ", len(balancedDict['seqName']))
-	#print ("total negatives: ", total)
+	report.write("Number balanced negatives: " + str( len(balancedDict['seqName'])) + "\n")
+	pasTypes = ['All', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU'] 
+	report.write("Positives dropped: " + "\n")
+	for t in pasTypes:
+		print ("dropped ", droppedTypeList.count(t), " of type ", t)
+		report.write("dropped " + str(droppedTypeList.count(t)) + " of type " + t + "\n")
+	report.close()
 	asDataFrame = pd.DataFrame(blankDict)
 	balancedAsDataFrame = pd.DataFrame(balancedDict)
-	filteredTrueName = fileName + "BalancedPositives.csv"
-	allNegatives = fileName + "AllNegatives.csv"
-	balancedNegatives = fileName + "BalancedNegatives.csv"
+	filteredTrueName = "./datasets/" + fileName + "BalancedPositives.csv"
+	allNegatives = "./datasets/" +  fileName + "AllNegatives.csv"
+	balancedNegatives ="./datasets/" +  fileName + "BalancedNegatives.csv"
 	copyTrueValues.to_csv(filteredTrueName)
 	asDataFrame.to_csv(allNegatives)
 	balancedAsDataFrame.to_csv(balancedNegatives)
@@ -345,46 +360,152 @@ def openBalancedPositives(name):
 	#colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
 	return pd.read_csv( positivesName, dtype = {"seqName": str}) 
 	
-def extractPredictionValues(name, negatives, positives):
+def extractPredictionValues(name, negatives, positives, pasType = ""):
 	#making a sklearn AUC and AUPRC plot to look at different threshold values
 	dummy = np.array([])
 	dummybools = np.array([])
 	predName = "chr" + name
-	forward, reverse = openForwardReverse("", predName)
+	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
 	flippedReverse = np.flip(reverse)
 	for index, row in negatives.iterrows():
 		startInt = int(row['start'])
 		endInt = int(row['end'])
 		if row['strand'] == "+":
-			#forward strand
-			#negatives are 0-indexed still
-			sliceVals = forward[startInt:endInt+ 1]
-			dummy = np.concatenate((dummy,sliceVals))
-			dummybools = np.concatenate((dummybools, np.zeros(sliceVals.size)))
+			if pasType == "":
+				#forward strand
+				#negatives are 0-indexed still
+				sliceVals = forward[startInt:endInt+ 1]
+				dummy = np.concatenate((dummy,sliceVals))
+				dummybools = np.concatenate((dummybools, np.zeros(sliceVals.size)))
+			else:
+				if row['type'] == pasType:
+					#forward strand
+					#negatives are 0-indexed still
+					sliceVals = forward[startInt:endInt+ 1]
+					dummy = np.concatenate((dummy,sliceVals))
+					dummybools = np.concatenate((dummybools, np.zeros(sliceVals.size)))
 		elif row['strand'] == "-":
-			#reverse strand
-			sliceVals = flippedReverse[startInt: endInt + 1]
-			dummy = np.concatenate((dummy,sliceVals))
-			dummybools = np.concatenate((dummybools, np.zeros(sliceVals.size)))
+			if pasType == "":
+				#reverse strand
+				sliceVals = flippedReverse[startInt: endInt + 1]
+				dummy = np.concatenate((dummy,sliceVals))
+				dummybools = np.concatenate((dummybools, np.zeros(sliceVals.size)))
+			else:
+				if row['type'] == pasType:
+					#reverse strand
+					sliceVals = flippedReverse[startInt: endInt + 1]
+					dummy = np.concatenate((dummy,sliceVals))
+					dummybools = np.concatenate((dummybools, np.zeros(sliceVals.size)))
 		else:
 			print ("ERROR!  Strand not listed for negative example")
 	for index,row in positives.iterrows():
 		startInt = int(row['start'])
 		endInt = int(row['end'])
 		if row['strand'] == "+":
-			#forward strand
-			#negatives are 0-indexed still
-			sliceVals = forward[startInt:endInt+ 1]
-			dummy = np.concatenate((dummy,sliceVals))
-			dummybools = np.concatenate((dummybools, np.ones(sliceVals.size)))
+			if pasType == "":
+				#forward strand
+				#negatives are 0-indexed still
+				sliceVals = forward[startInt:endInt+ 1]
+				dummy = np.concatenate((dummy,sliceVals))
+				dummybools = np.concatenate((dummybools, np.ones(sliceVals.size)))
+			else:	
+				if row['type'] == pasType:
+					#forward strand
+					#negatives are 0-indexed still
+					sliceVals = forward[startInt:endInt+ 1]
+					dummy = np.concatenate((dummy,sliceVals))
+					dummybools = np.concatenate((dummybools, np.ones(sliceVals.size)))
 		elif row['strand'] == "-":
-			#reverse strand
-			flippedReverse = flippedReverse[startInt: endInt + 1]
-			dummy = np.concatenate((dummy,sliceVals))
-			dummybools = np.concatenate((dummybools, np.ones(sliceVals.size)))
+			if pasType == "":
+				#reverse strand
+				flippedReverse = flippedReverse[startInt: endInt + 1]
+				dummy = np.concatenate((dummy,sliceVals))
+				dummybools = np.concatenate((dummybools, np.ones(sliceVals.size)))
+			else:
+				if row['type'] == pasType:
+					#reverse strand
+					flippedReverse = flippedReverse[startInt: endInt + 1]
+					dummy = np.concatenate((dummy,sliceVals))
+					dummybools = np.concatenate((dummybools, np.ones(sliceVals.size)))
 		else:
 			print ("ERROR!  Strand not listed for negative example")
 	return dummybools, dummy
+
+
+def extractAllPredictionValues(names, stem, b, s, pasType = ""):
+	values = np.array([])
+	#posVals = np.array([])
+	#negVals = np.array([])
+	bools = np.array([])
+	for name in names:
+		fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
+		negatives = openBalancedNegatives(fileName)
+		positives = openBalancedPositives(fileName)
+		boolsCurrent, valsCurrent = extractPredictionValues(name, negatives, positives, pasType)
+		values = np.concatenate((values, valsCurrent))
+		bools = np.concatenate((bools, boolsCurrent))
+	return values, bools
+	
+
+
+def extractPredictionValuesSeparateArrays(name, negatives, positives, pasType = ""):
+	#returns negative values and positive values
+	dummyNegatives = np.array([])
+	dummyPositives = np.array([])
+	predName = "chr" + name
+	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
+	flippedReverse = np.flip(reverse)
+	for index, row in negatives.iterrows():
+		startInt = int(row['start'])
+		endInt = int(row['end'])
+		if row['strand'] == "+":
+			if pasType == "":
+				#forward strand
+				#negatives are 0-indexed still
+				sliceVals = forward[startInt:endInt+ 1]
+				dummyNegatives = np.concatenate((dummyNegatives,sliceVals))
+			else:
+				if row['type'] == pasType:
+					sliceVals = forward[startInt:endInt+ 1]
+					dummyNegatives = np.concatenate((dummyNegatives,sliceVals))
+		elif row['strand'] == "-":
+			if pasType == "":
+				#reverse strand
+				sliceVals = flippedReverse[startInt: endInt + 1]
+				dummyNegatives = np.concatenate((dummyNegatives,sliceVals))
+			else:
+				if row['type'] == pasType:
+					sliceVals = flippedReverse[startInt: endInt + 1]
+					dummyNegatives = np.concatenate((dummyNegatives,sliceVals))
+		else:
+			print ("ERROR!  Strand not listed for negative example")
+	for index,row in positives.iterrows():
+		startInt = int(row['start'])
+		endInt = int(row['end'])
+		if row['strand'] == "+":
+			if pasType == "":
+				#forward strand
+				#negatives are 0-indexed still
+				sliceVals = forward[startInt:endInt+ 1]
+				dummyPositives = np.concatenate((dummyPositives,sliceVals))
+			else:
+				if row['type'] == pasType:
+					sliceVals = forward[startInt:endInt+ 1]
+					dummyPositives = np.concatenate((dummyPositives,sliceVals))
+		elif row['strand'] == "-":
+			if pasType == "":
+				#reverse strand
+				flippedReverse = flippedReverse[startInt: endInt + 1]
+				dummyPositives = np.concatenate((dummyPositives,sliceVals))
+			else:
+				if row['type'] == pasType:
+					#reverse strand
+					flippedReverse = flippedReverse[startInt: endInt + 1]
+					dummyPositives = np.concatenate((dummyPositives,sliceVals))
+				
+		else:
+			print ("ERROR!  Strand not listed for negative example")
+	return dummyNegatives, dummyPositives
 
 def maxPosDist45DegreeLine(fpr,tpr, threshs):
 	#fpr is x, tpr is y
@@ -445,9 +566,12 @@ def computeAndGraphAllROCs(trueValsArray, preds):
 	prec, rec, thresholdsPR = metrics.precision_recall_curve(trueValsArray, preds)
 	auc_score = metrics.roc_auc_score(trueValsArray,preds)
 	auprc_score = metrics.average_precision_score(trueValsArray, preds)
-	#posDistFPR, posDistTPR, posDistThresh, x  = maxPosDist45DegreeLine(fpr,tpr,thresholds)
-	#equalFPR, equalTPR, equalThresh, x  = findSpecifictySensitivityEqualityPoint(fpr,tpr,thresholds)
-	#closeFPR, closeTPR, closeThresh, x  = minDistanceTopLeftCorner(fpr,tpr,thresholds)
+	posDistFPR, posDistTPR, posDistThresh, x  = maxPosDist45DegreeLine(fpr,tpr,thresholds)
+	print ("Best threshold by 45 degree line distance: ", posDistThresh)
+	equalFPR, equalTPR, equalThresh, x  = findSpecifictySensitivityEqualityPoint(fpr,tpr,thresholds)
+	print ("Best threshold by specificity Sensisitivity Equality: ", equalThresh)
+	closeFPR, closeTPR, closeThresh, x  = minDistanceTopLeftCorner(fpr,tpr,thresholds)
+	print ("Best threshold by closest to top left corner: ", closeThresh)
 	return fpr,tpr,thresholds,auc_score, prec, rec, thresholdsPR, auprc_score
 
 
@@ -458,6 +582,7 @@ def createBalancedDatasets(chroName, bufferRegions, spacings, fastaPath):
 	#open fasta
 	totalName = fastaPath + "chr" + chroName + ".fasta"
 	chroSeq = SeqIO.read(totalName, "fasta")
+	print ("sequence length: ", len(chroSeq.seq))
 	currentTime = time.time()
 	print ("___________________________________")
 	print ("FASTA OPENED: ")
@@ -474,11 +599,13 @@ def createBalancedDatasets(chroName, bufferRegions, spacings, fastaPath):
 			print (fileName)
 			createNegativeDataSet(openPAS, b, s, fileName, chroSeq.seq)
 			print ("___________________________________")
-			print ("elapsed time: ", time.time() - currnentTime)
+			print ("elapsed time: ", time.time() - currentTime)
 			print ("___________________________________")
 			print (" ")
 			
 		
+		
+
 	
 	
 
@@ -506,17 +633,24 @@ plt.show()
 '''
 
 
-
-fastaPath = "./Desktop/aparentGenomeTesting/fastas/"
-#pasTypes = ['All', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU'] 
+'''
+fastaPath = "../../aparentGenomeTesting/fastas/"
 bufferRegions = [1,4]
-spacing = [50]
-chromosomes = ["20", "21", "22", "X", "Y"]
-
+spacing = [ 50, 75, 100]
+chromosomes = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"]
 for c in chromosomes:
 	createBalancedDatasets(c, bufferRegions, spacing, fastaPath)
-
-
+'''
+values, bools = extractAllPredictionValues(["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "Y"], "./datasets/", 1, 50, "IN")
+fpr,tpr,thresholds,auc_score, prec, rec, thresholdsPR, auprc_score = computeAndGraphAllROCs(bools, values)
+print ("AUC Score: ", auc_score)
+print ("Avg Precision Score: ", auprc_score)
+plt.plot(fpr, tpr)
+plt.title("AUC All But X IN")
+plt.show()
+plt.plot(prec, rec)
+plt.title("PR Curve All but X IN")
+plt.show()
 
 
 
