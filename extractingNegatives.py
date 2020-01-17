@@ -43,7 +43,7 @@ else:
 ensembl = pyensembl.EnsemblRelease(release = '96')
 
 
-#open all PAS dataframes
+#MAKING NEGATIVE DATASETS #######################################################################
 
 #opens human cluster data for given chromosome.  Can optionally filter by PAS type
 def openPASClustersForChromosome(name, pasType = 'All'):
@@ -62,7 +62,7 @@ def openPASClustersForChromosome(name, pasType = 'All'):
 
 
 #fails the pos signal if there are "N" in the true region, or in the region used to predict the true pas region [start - 205, end + 205]
-def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, spacingValue, shiftValue, fastaSeq, strictNFiltering = True, strictFilteringValue = 205):
+def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, currentTrueNegs, spacingValue, shiftValue, fastaSeq, strictNFiltering = True, strictFilteringValue = 205):
 	#following Leung et al's true negative rules, count it as a negative if it can be shifted 50 nts and still fit four multiples of the negative region between it and the next polyA signal
 	#filtering positive signals for sequences with N's
 	
@@ -102,7 +102,8 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, spacingValue, shif
 		rightNCount = rightSlice.count("N")
 		rightPassed = False
 		### LEFT
-		if leftNCount == 0:
+		if leftNCount == 0: 
+			#check if a true positive will occur in this range
 			leftCheck = pasRow['start'] - checkRange
 			filterVals1 = (allPAS['strand'] == pasRow['strand']) & (allPAS['seqName'] == pasRow['seqName']) & (allPAS['end'] >= leftCheck) & (allPAS['start'] >= leftCheck) & (allPAS['start'] < pasRow['start'])
 			filterVals2 = (allPAS['strand'] == pasRow['strand']) & (allPAS['seqName'] == pasRow['seqName']) & (allPAS['end'] >= leftCheck) & (allPAS['start'] <= leftCheck)
@@ -111,6 +112,9 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, spacingValue, shif
 			sumInForbiddenRange = otherPAS1Left.shape[0] + otherPAS2Left.shape[0]
 			if sumInForbiddenRange == 0: 
 				leftPassed = True
+			#check if negative created overlaps with an existing negative already
+			#TODO
+			
 		else:
 			print ("Sequence rejected on left negative: ", leftSlice)
 			leftStart = -1
@@ -118,6 +122,7 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, spacingValue, shif
 		#####
 		##### RIGHT 
 		if rightNCount ==0:
+			#check if the negative range contains/overlaps with an existing positive
 			rightCheck = pasRow['end'] + checkRange
 			filterVals1 = (allPAS['strand'] == pasRow['strand']) & (allPAS['seqName'] == pasRow['seqName']) & (allPAS['start'] <= rightCheck) & (allPAS['end'] <= rightCheck) & (allPAS['start'] >= pasRow['end']) 
 			filterVals2 = (allPAS['strand'] == pasRow['strand']) & (allPAS['seqName'] == pasRow['seqName']) & (allPAS['start'] <= rightCheck) & (allPAS['end'] >= rightCheck)
@@ -126,6 +131,9 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, spacingValue, shif
 			sumInForbiddenRangeRight = otherPAS1Right.shape[0] + otherPAS2Right.shape[0]
 			if sumInForbiddenRangeRight == 0:
 				rightPassed = True
+			#check if the negative overlaps with an existing negative already
+			#TODO
+			
 		else:
 			print ("Sequence rejected on right negative: ", rightSlice)
 			rightStart = -1
@@ -150,6 +158,8 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, spacingValue, shif
 		return False, -2, -2, False, -2, -2
 	
 
+
+
 def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq):
 	#create dictionary for negative valeus left and right 
 	#["seqName",  "start" , "end",  "clusterID",  "avgTPM",  "strand",   "percentSupporting",   "protocolsSupporting",  "avgTPM2",   "type",   "upstreamClusters"]
@@ -163,6 +173,9 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 	passedRightOnly = 0
 	total = 0
 	random.seed()
+	#maintain a dataframe of current true negatives to prevent same region being marked as a true negative multiple times 
+	negativeDataFrame = pd.DataFrame(blankDict)
+	balancedDataFrame = pd.DataFrame(balancedDict)
 	for index, row in trueVals.iterrows():
 		total += 1
 		leftPassed, leftStart, leftEnd, rightPassed, rightStart, rightEnd = shiftLeftAndRightNegativesFilterPositives(row, trueVals, spacingValue, shiftValue, fastaSeq)
@@ -534,102 +547,6 @@ def createBalancedDatasets(chroName, bufferRegions, spacings, fastaPath):
 			print (" ")
 			
 		
-		
-def placePeaksWithTolerance(peaks, clusters, tolerance, sign, lenSeq):
-	clusterRanges = clusters.keys()
-	for peak in peaks:
-		if sign == "-":
-			peak = flipSequenceIndex(peak, lenSeq)
-		placed = False
-		for rng in clusterRanges:
-			if rng != 'Unplaced':
-				lower = rng[0] - tolerance
-				upper = rng[1] + tolerance
-				if peak >= lower and peak <= upper: #if the peak is in [start, end]
-					clusters[rng].append(peak)
-					placed = True
-					break
-		if not placed: #wasn't placed
-			clusters['Unplaced'].append(peak)
-	return clusters
-
-
-#using the peak-cluster dictionaries 
-#need to count TP, FP, FN (placed peaks, unplaced peaks, empty clusters)
-def fillConfMatrix(dictForward, dictRC):
-	countTP = 0 #peaks in true cluster
-	countFP = 0 #peak in false cluster 
-	countFN = 0 #no peak in true cluster
-	countTN = 0 #no peak in false cluster
-	for key in dictForward:
-		if key != 'Unplaced':
-			inCluster = len(dictForward[key])
-			if inCluster != 0:
-				countTP += inCluster
-				#print (key, " contains: ", inCluster)
-			else:
-				countFN += 1
-		else: #unplaced peaks
-			countFP += len(dictForward[key])
-	for key in dictRC:
-		if key != 'Unplaced':
-			inCluster = len(dictRC[key])
-			if inCluster != 0:
-				countTP += inCluster
-				#print (key, " contains: ", inCluster)
-			else:
-				countFN += 1
-		else: #unplaced peaks
-			countFP += len(dictRC[key])
-	return countTP, countFP, countFN
-	
-def calculatePrecisionRecall(tp, fp, fn):
-	precision = tp / (tp + fp)
-	recall = tp / (tp + fn)
-	if tp == 0:
-		return precision, recall, None
-	else: 
-		f1 =  (2 * (precision * recall))/(precision + recall)
-	return precision, recall, f1
-	
-
-#creates forward and reverse strand dictionaries for the balanced dataset given to it
-def openBalancedValuesForType(name, toSeparate, pasType):
-	clustersForward = {}
-	clustersRC = {} #key of (Start, End) will use to track clusters with no peaks for the FN  
-	if pasType == "All":
-		for index, row in toSeparate.iterrows():
-			if row['strand'] == "+": #forward strand
-				clustersForward[(row['start'], row['end'])] = []
-			else: #negative strand, RC cluster
-				clustersRC[(row['start'], row['end'])] = []
-		clustersForward['Unplaced'] = []
-		clustersRC['Unplaced'] = []
-	else:
-		
-		maskType = toSeparate["type"] == pasType
-		maskedTrue = toSeparate[maskType]
-		for index, row in maskedTrue.iterrows():
-			if row['strand'] == "+": #forward strand
-				clustersForward[(row['start'], row['end'])] = []
-			else: #negative strand, RC cluster
-				clustersRC[(row['start'], row['end'])] = []
-		clustersForward['Unplaced'] = []
-		clustersRC['Unplaced'] = []
-	#print (clustersForward)	
-	return clustersForward, clustersRC
-
-
-def buildConfidenceMatrix(name, pasType, stem, b, s):
-	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
-	balancedPositives = openBalancedPositives(fileName)
-	balancedNegatives = openBalancedNegatives(fileName)
-	
-
-
-	
-	
-
 def makeNegativeDatasetsForGenome():
 	fastaPath = "../../aparentGenomeTesting/fastas/"
 	bufferRegions = [1,4]
@@ -660,7 +577,235 @@ def makeGraphsAverageCleavageValues(b = 1, s = 50, typePas = ""):
 	
 
 
+
+# CREATING CONFUSION MATRICS FOR PEAKS IN THE DATA #####################################################
+
+class peakConfusionMatrix(object):
+	def __init__(self, countTP, countFP, countFN, countTN , unplacedPredictions, totalPredictions):
+		self.truePositves = countTP
+		self.falsePositives = countFP
+		self.falseNegatives = countFN
+		self.trueNegatives = countTN
+		self.unplacedPredictions = unplacedPredictions
+		self.totalPredictionsMade = totalPredictions
 	
+	def truePositiveRate(self):
+	#AKA sensitivity, how good the model is at predicting the positive class when the actual outcome is positive
+		if not (self.truePositives + self.falseNegatives) == 0:
+			return self.truePositives/(self.truePositives + self.falseNegatives)
+		else:
+			print ("ERROR!  Dividing by 0 in TPR calculation")
+			return -1
+	
+	def falsePositiveRate(self):
+	#how often positive is predicted when actual outcome is false
+		if not (self.falsePositives + self.trueNegatives) == 0 :
+			return self.falsePositives/(self.falsePositives + self.trueNegatives)
+		else:
+			print ("ERROR! Dividing by 0 in FPR")
+			return None
+	
+	def specificity(self):
+		if not  (self.trueNegatives + self.falsePositives) == 0:
+			return self.trueNegatives/ (self.trueNegatives + self.falsePositives)
+		else:
+			print ("ERROR! Dividing by 0 in specificity calc")
+			return None
+	
+	def precision(self):
+	#how good model is at predicting positive class
+		if not (self.truePositives + self.falsePositives) == 0:
+			return self.truePositives/(self.truePositives + self.falsePositives)
+		else:
+			print ("ERROR! Dividing by 0 in precision calc")
+			return None
+	
+	def recall(self):
+		#Same as sensitvity AKA TPR
+		return self.truePositiveRate(self)
+	
+	
+	
+		
+#use to correct the indexes for the RC predictions so that they can be matched with the true cluster labels (since those are indexed according to the forward strand)
+def flipSequenceIndex(index, lenSeq):
+	b = lenSeq - 1
+	return -1 * index + b
+
+		
+def placePeaksWithTolerance(peaks, clustersNegative, clustersPositive, tolerance, sign, lenSeq):
+	clusterRangesNegative = clustersNegative.keys()
+	clusterRangesPositive = clustersPositive.keys()
+	numberUnplacedPeaks = 0
+	for peak in peaks:
+		if sign == "-":
+			peak = flipSequenceIndex(peak, lenSeq)
+		placed = False
+		for rng in clusterRangesPositive:
+			if rng != 'Unplaced':
+				lower = rng[0] - tolerance
+				upper = rng[1] + tolerance
+				if peak >= lower and peak <= upper: #if the peak is in [start, end]
+					clustersPositive[rng].append(peak)
+					placed = True
+					break
+		if not placed:
+			for rng in clusterRangesNegative:
+				if rng != 'Unplaced':
+					lower = rng[0] - tolerance
+					upper = rng[1] + tolerance
+					if peak >= lower and peak <= upper: #if the peak is in [start, end]
+						clustersNegative[rng].append(peak)
+						placed = True
+						break			
+		if not placed: #wasn't placed
+			numberUnplacedPeaks += 1
+	return clustersNegative, clustersPositive, numberUnplacedPeaks
+
+
+#using the peak-cluster dictionaries 
+#need to count TP, FP, FN (placed peaks, unplaced peaks, empty clusters)
+def fillConfMatrix(dictForwardPlus, dictForwardNegative, dictRCPlus, dictRCNegative):
+	countTP = 0 #peaks in true cluster
+	countFP = 0 #peak in false cluster 
+	countFN = 0 #no peak in true cluster
+	countTN = 0 #no peak in false cluster
+	for key in dictForwardPlus:
+		inCluster = len(dictForwardPlus[key])
+		if inCluster != 0: #peak in a positive cluster
+			countTP += inCluster
+		else: #empty true cluster
+			countFN += 1
+	for key in dictRCPlus:
+		inCluster = len(dictRCPlus[key])
+		if inCluster != 0:
+			countTP += inCluster
+		else:
+			countFN += 1
+	for key in dictForwardNegative:
+		inCluster = len(dictForwardNegative[key])
+		if inCluster != 0:
+			#peak in false cluster
+			countFP += 1
+		else:
+			#no peak in false cluster
+			countTN += 1
+	for key in dictRCNegative:
+		inCluster = len(dictRCNegative[key])
+		if inCluster != 0:
+			#peak in false cluster
+			countFP += 1
+		else:
+			#no peak in false cluster
+			countTN += 1
+	return countTP, countFP, countFN, countTN
+			
+
+#creates forward and reverse strand dictionaries for the balanced dataset given to it
+def openBalancedValuesForType(toSeparate, pasType = ""):
+	clustersForward = {}
+	clustersRC = {} #key of (Start, End) will use to track clusters with no peaks for the FN  
+	if pasType == "":
+		for index, row in toSeparate.iterrows():
+			if row['strand'] == "+": #forward strand
+				clustersForward[(row['start'], row['end'])] = []
+			else: #negative strand, RC cluster
+				clustersRC[(row['start'], row['end'])] = []
+		clustersForward['Unplaced'] = []
+		clustersRC['Unplaced'] = []
+	else:
+		
+		maskType = toSeparate["type"] == pasType
+		maskedTrue = toSeparate[maskType]
+		for index, row in maskedTrue.iterrows():
+			if row['strand'] == "+": #forward strand
+				clustersForward[(row['start'], row['end'])] = []
+			else: #negative strand, RC cluster
+				clustersRC[(row['start'], row['end'])] = []
+	#print (clustersForward)	
+	return clustersForward, clustersRC
+
+
+def buildConfidenceMatrixOneChro(name, stem, b, s, minh, dist, tolerance, pasType = ""):
+	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
+	balancedPositives = openBalancedPositives(fileName)
+	balancedNegatives = openBalancedNegatives(fileName)
+	clustersFPositve, clustersRCPositive = openBalancedValuesForType(balancedPositives, pasType)
+	clustersFNegative, clustersRCNegative = openBalancedValuesForType(balancedNegatives, pasType)
+	#open peaks for the forward and reverse strand predictions
+	predName = "chr" + name
+	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
+	forwardPeaks = find_peaks_ChromosomeVersion(forward, minh, dist, (0.01, None)) 
+	reversePeaks = find_peaks_ChromosomeVersion(reverse, minh, dist, (0.01, None)) 
+	#place peaks
+	clustersFNegative, clustersFPositve, numberUnplacedForward = placePeaksWithTolerance(forwardPeaks, clustersFNegative, clustersFPositve, tolerance, "+", forward.shape[0])
+	clustersRCNegative, clustersRCPositive, numberUnplacedReverse = placePeaksWithTolerance(reversePeaks, clustersRCNegative, clustersRCPositive, tolerance, "-", forward.shape[0])
+	countTP, countFP, countFN, countTN = fillConfMatrix(clustersFPositve, clustersFNegative, clustersRCPositive, clustersRCNegative)
+	return countTP, countFP, countFN, countTN, numberUnplacedForward + numberUnplacedReverse, len(forwardPeaks) + len(reversePeaks)
+	
+	
+def buildConfidenceMatrixMultipleChromosomes(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType = ""):
+	countTPOverall = 0
+	countFPOverall = 0
+	countFNOverall = 0
+	countTNOverall = 0
+	countUnplaced = 0
+	totalPeaks = 0
+	for name in names:
+		countTP, countFP, countFN, countTN, unplaced, numberPeaks = buildConfidenceMatrixOneChro(name, stem, bufferVal, spacing, minh, dist, tolerance, pasType)
+		countTPOverall += countTP
+		countFPOverall += countFP
+		countFNOverall += countFN
+		countTNOverall += countTN
+		countUnplaced += unplaced
+		totalPeaks += numberPeaks
+	return peakConfusionMatrix(countTPOverall, countFPOverall, countFNOverall, countTNOverall, countUnplaced, totalPeaks)
+	
+
+def buildConfusionMatricesForGraphing(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
+	confusionMatrices = []
+	for minh in minhs:
+		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomes(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
+	recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
+	precisions = [c.precision() for p in confusionMatrices] #y axis on Precision Recall Curve
+	falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
+	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve
+	fractionPeaksUnplaced = [c.unplacedPredictions/c.totalPredictionsMade for c in confusionMatrices] 
+	#graph ROC curve 
+	#add (0,0) and (1,0) points if they are not present?
+	plt.plot(falsePositiveRates, truePositiveRates)
+	plt.title("ROC Curve")
+	plt.xlabel("FPR")
+	plt.ylabel("TPR")
+	plt.show()
+	#plot PR Curve
+	plt.plot(recalls, precisions)
+	plt.title("PR Curve")
+	plt.xlabel("Recall")
+	plt.ylabel("Precision")
+	plt.show()
+	#plot ratio of unplaced to minH value
+	plt.plot(minhs, fractionPeaksUnplaced)
+	plt.title("Fraction of peaks unplaced vs Minimum Height of Peak")
+	plt.xlabel("Peak Min Height")
+	plt.ylabel("Fraction of total peaks unplaced")
+	plt.show()
+	
+
+
+#testing 
+names = ["21", "22", "Y"]
+stem = 
+	
+
+	
+	
+	
+
+
+	
+	
+
 
 
 
