@@ -1,9 +1,3 @@
-total rows: 51384
-True positives remaining: 48745
-Number with left and right negatives: 40290
-Number with only left negative: 4204
-Number with only right negative: 4251
-Number balanced negatives: 48745
 Positives dropped: 
 dropped 0 of type All
 dropped 110 of type IN

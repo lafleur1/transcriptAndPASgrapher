@@ -1,9 +1,3 @@
-total rows: 37482
-True positives remaining: 35191
-Number with left and right negatives: 29577
-Number with only left negative: 2838
-Number with only right negative: 2776
-Number balanced negatives: 35191
 Positives dropped: 
 dropped 0 of type All
 dropped 135 of type IN

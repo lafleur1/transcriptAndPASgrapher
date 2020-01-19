@@ -62,7 +62,7 @@ def openPASClustersForChromosome(name, pasType = 'All'):
 
 
 #fails the pos signal if there are "N" in the true region, or in the region used to predict the true pas region [start - 205, end + 205]
-def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, currentTrueNegs, spacingValue, shiftValue, fastaSeq, strictNFiltering = True, strictFilteringValue = 205):
+def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, currentAllNegs, currentBalancedNegs, spacingValue, shiftValue, fastaSeq, strictNFiltering = True, strictFilteringValue = 205):
 	#following Leung et al's true negative rules, count it as a negative if it can be shifted 50 nts and still fit four multiples of the negative region between it and the next polyA signal
 	#filtering positive signals for sequences with N's
 	
@@ -88,7 +88,8 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, currentTrueNegs, s
 			leftSliceEnd = len(fastaSeq) - 1
 		leftSlice = fastaSeq[leftSliceStart: leftSliceEnd + 1]
 		leftNCount = leftSlice.count("N")
-		leftPassed = False
+		leftPassedAll = False
+		leftPassedBalanced = False
 		
 		rightStart = pasRow['start'] + shiftValue
 		rightEnd = pasRow['end'] + shiftValue
@@ -100,7 +101,8 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, currentTrueNegs, s
 			leftSliceEnd = len(fastaSeq) - 1
 		rightSlice = fastaSeq[rightSliceStart:rightSliceEnd + 1]
 		rightNCount = rightSlice.count("N")
-		rightPassed = False
+		rightPassedAll = False
+		rightPassedBalanced = False
 		### LEFT
 		if leftNCount == 0: 
 			#check if a true positive will occur in this range
@@ -111,10 +113,14 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, currentTrueNegs, s
 			otherPAS2Left = allPAS[filterVals2]
 			sumInForbiddenRange = otherPAS1Left.shape[0] + otherPAS2Left.shape[0]
 			if sumInForbiddenRange == 0: 
-				leftPassed = True
-			#check if negative created overlaps with an existing negative already
-			#TODO
-			
+				negativeAllFilter = ((currentAllNegs['start'] <= leftStart) & (currentAllNegs['end'] >= leftStart)) | ((currentAllNegs['start'] <= leftEnd) & (currentAllNegs['end'] >= leftEnd)) | ((currentAllNegs['start'] >= leftStart) & (currentAllNegs['start'] <= leftEnd))				
+				negativeBalancedFilter = ((currentBalancedNegs['start'] <= leftStart) & (currentBalancedNegs['end'] >= leftStart)) | ((currentBalancedNegs['start'] <= leftEnd) & (currentBalancedNegs['end'] >= leftEnd)) | ((currentBalancedNegs['start'] >= leftStart) & (currentBalancedNegs['start'] <= leftEnd))	
+				negativeAll = currentAllNegs[negativeAllFilter]
+				negativeBalanced = currentBalancedNegs[negativeBalancedFilter]
+				if negativeAll.shape[0] == 0:
+					leftPassedAll = True
+				if negativeBalanced.shape[0] == 0:
+					leftPassedBalanced = True
 		else:
 			print ("Sequence rejected on left negative: ", leftSlice)
 			leftStart = -1
@@ -130,9 +136,14 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, currentTrueNegs, s
 			otherPAS2Right = allPAS[filterVals2]
 			sumInForbiddenRangeRight = otherPAS1Right.shape[0] + otherPAS2Right.shape[0]
 			if sumInForbiddenRangeRight == 0:
-				rightPassed = True
-			#check if the negative overlaps with an existing negative already
-			#TODO
+				negativeAllFilter = ((currentAllNegs['start'] <= leftStart) & (currentAllNegs['end'] >= leftStart)) | ((currentAllNegs['start'] <= leftEnd) & (currentAllNegs['end'] >= leftEnd)) | ((currentAllNegs['start'] >= leftStart) & (currentAllNegs['start'] <= leftEnd))				
+				negativeBalancedFilter = ((currentBalancedNegs['start'] <= leftStart) & (currentBalancedNegs['end'] >= leftStart)) | ((currentBalancedNegs['start'] <= leftEnd) & (currentBalancedNegs['end'] >= leftEnd)) | ((currentBalancedNegs['start'] >= leftStart) & (currentBalancedNegs['start'] <= leftEnd))	
+				negativeAll = currentAllNegs[negativeAllFilter]
+				negativeBalanced = currentBalancedNegs[negativeBalancedFilter]
+				if negativeAll.shape[0] == 0:
+					rightPassedAll = True
+				if negativeBalanced.shape[0] == 0:
+					rightPassedBalanced = True
 			
 		else:
 			print ("Sequence rejected on right negative: ", rightSlice)
@@ -152,10 +163,10 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, currentTrueNegs, s
 			print (otherPAS2Right)
 			print ("----------------------------------")
 		'''
-		return leftPassed, leftStart, leftEnd, rightPassed, rightStart, rightEnd
+		return leftPassedAll, rightPassedAll, leftPassedBalanced, rightPassedBalanced, leftStart, leftEnd, rightStart, rightEnd
 	else:
 		print ("Sequence rejected on positive region: ", filteringTrueSequence)
-		return False, -2, -2, False, -2, -2
+		return False, False, False, False, -2, -2, -2, -2
 	
 
 
@@ -167,103 +178,88 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 	balancedDict = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
 	droppedTypeList = []
 	copyTrueValues = trueVals.copy(deep = True) #make deep copy of dataframe
-	numberFailedBoth = 0
-	passedBoth = 0
-	passedLeftOnly = 0
-	passedRightOnly = 0
-	total = 0
 	random.seed()
-	#maintain a dataframe of current true negatives to prevent same region being marked as a true negative multiple times 
-	negativeDataFrame = pd.DataFrame(blankDict)
-	balancedDataFrame = pd.DataFrame(balancedDict)
+	negativesAllDF = pd.DataFrame(blankDict)
+	negativesBalancedDF = pd.DataFrame(balancedDict)
 	for index, row in trueVals.iterrows():
-		total += 1
-		leftPassed, leftStart, leftEnd, rightPassed, rightStart, rightEnd = shiftLeftAndRightNegativesFilterPositives(row, trueVals, spacingValue, shiftValue, fastaSeq)
-		if leftPassed:
-			blankDict['seqName'].append(row['seqName'])
-			blankDict['start'].append(leftStart)
-			blankDict['end'].append(leftEnd)
-			newID = row['clusterID'] + "_LeftNegative"
-			blankDict['clusterID'].append(newID)
-			blankDict['strand'].append(row['strand'])
-			blankDict['type'].append(row['type'])
-			blankDict['side'].append("Left")
-		if rightPassed:
-			blankDict['seqName'].append(row['seqName'])
-			blankDict['start'].append(rightStart)
-			blankDict['end'].append(rightEnd)
-			newID = row['clusterID'] + "_RightNegative"
-			blankDict['clusterID'].append(newID)
-			blankDict['strand'].append(row['strand'])
-			blankDict['type'].append(row['type'])
-			blankDict['side'].append("Right")
+		#total += 1
+		#passedTrue += 1
+		leftPassedAll, rightPassedAll, leftPassedBalanced, rightPassedBalanced, leftStart, leftEnd, rightStart, rightEnd = shiftLeftAndRightNegativesFilterPositives(row, trueVals, negativesAllDF, negativesBalancedDF, spacingValue, shiftValue, fastaSeq)
+		leftRow = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
+		rightRow = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
+		#fill left row
+		leftRow['seqName'].append(row['seqName'])
+		leftRow['start'].append(leftStart)
+		leftRow['end'].append(leftEnd)
+		newID = row['clusterID'] + "_LeftNegative"
+		leftRow['clusterID'].append(newID)
+		leftRow['strand'].append(row['strand'])
+		leftRow['type'].append(row['type'])
+		leftRow['side'].append("Left")
+		#fill right row
+		rightRow['seqName'].append(row['seqName'])
+		rightRow['start'].append(rightStart)
+		rightRow['end'].append(rightEnd)
+		newID = row['clusterID'] + "_RightNegative"
+		rightRow['clusterID'].append(newID)
+		rightRow['strand'].append(row['strand'])
+		rightRow['type'].append(row['type'])
+		rightRow['side'].append("Right")
 		if leftStart == leftEnd == -1:
 			print ("Failed due to N's in left sequence")
 		if rightStart == rightEnd == -1:
 			print ("Failed due to N's in right sequence")
 		if leftStart == leftEnd == rightStart == rightEnd == -2:
-			print ("Failed due to N's in true positive sequence")	
-		if leftPassed and rightPassed:
-			passedBoth += 1
-			#chose one to store
+			print ("Failed due to N's in true positive sequence")
+		leftRowDF = pd.DataFrame(leftRow)
+		rightRowDF = pd.DataFrame(rightRow)
+		#All dataset
+		if leftPassedAll and rightPassedAll:
+			#add both to All dataset
+			negativesAllDF.append(leftRowDF)
+			negativesAllDF.append(rightRowDF)
+		elif leftPassedAll and not rightPassedAll:
+			#add left to dataset
+			negativesAllDF.append(leftRowDF)
+		elif not leftPassedAll and rightPassedAll:
+			#add right to dataset
+			negativesAllDF.append(rightRowDF)
+		#balanced dataset 
+		if leftPassedBalanced and rightPassedBalanced:
+			#if both passed, flip coin and add one to balanced dataset
 			randInt = random.randint(0,1)
-			if randInt == 0: #left
-				balancedDict['seqName'].append(row['seqName'])
-				balancedDict['start'].append(leftStart)
-				balancedDict['end'].append(leftEnd)
-				newID = row['clusterID'] + "_LeftNegative"
-				balancedDict['clusterID'].append(newID)
-				balancedDict['strand'].append(row['strand'])
-				balancedDict['type'].append(row['type'])
-				balancedDict['side'].append("Left")
+			if randInt == 0: 
+				#add left to balanced
+				negativesBalancedDF.append(leftRowDF)
 			else:
-				balancedDict['seqName'].append(row['seqName'])
-				balancedDict['start'].append(rightStart)
-				balancedDict['end'].append(rightEnd)
-				newID = row['clusterID'] + "_RightNegative"
-				balancedDict['clusterID'].append(newID)
-				balancedDict['strand'].append(row['strand'])
-				balancedDict['type'].append(row['type'])
-				balancedDict['side'].append("Right")
-		if leftPassed and not rightPassed:
-			passedLeftOnly += 1
-			balancedDict['seqName'].append(row['seqName'])
-			balancedDict['start'].append(leftStart)
-			balancedDict['end'].append(leftEnd)
-			newID = row['clusterID'] + "_LeftNegative"
-			balancedDict['clusterID'].append(newID)
-			balancedDict['strand'].append(row['strand'])
-			balancedDict['type'].append(row['type'])
-			balancedDict['side'].append("Left")
-		if rightPassed and not leftPassed:
-			passedRightOnly += 1
-			balancedDict['seqName'].append(row['seqName'])
-			balancedDict['start'].append(rightStart)
-			balancedDict['end'].append(rightEnd)
-			newID = row['clusterID'] + "_RightNegative"
-			balancedDict['clusterID'].append(newID)
-			balancedDict['strand'].append(row['strand'])
-			balancedDict['type'].append(row['type'])
-			balancedDict['side'].append("Right")
-		if not leftPassed and not rightPassed:
-			numberFailedBoth += 1
+				#add right to balanced
+				negativesBalancedDF.append(rightRowDF)
+		elif leftPassedBalanced and not rightPassedBalanced:
+			#if only left, add left to balanced dataset
+			negativesBalancedDF.append(leftRowDF)
+		elif not leftPassedBalanced and rightPassedBalanced:
+			#if only right, add right to balanced dataset	
+			negativesBalancedDF.append(rightRowDF)
+		if not leftPassedBalanced and not rightPassedBalanced: #create balanced dataset
+			#numberFailedBoth += 1
 			#delete the row from the copy
+			#passedTrue += -1
 			copyTrueValues.drop(index = index, inplace = True)
 			print ("DROPPED: ", row['clusterID'], " ", row['type'])
 			droppedTypeList.append(row['type'])
 	report = open("./reports/" + fileName + "DatasetsReport.txt", "w")
-	print ("total rows: ", total)
-	report. write ("total rows: " + str(total) + "\n")
-	print ("True positives remaining: ", total - numberFailedBoth)
-	report.write("True positives remaining: " + str(total - numberFailedBoth) + "\n")
-	print ("Number with left and right negatives: ", passedBoth)
-	report.write("Number with left and right negatives: "+ str(passedBoth) + "\n")
-	print ("Number with only left negative: ", passedLeftOnly)
-	report.write("Number with only left negative: " + str(passedLeftOnly) + "\n")
-	print ("Number with only right negative: ", passedRightOnly)
-	report.write("Number with only right negative: " + str(passedRightOnly) + "\n")
-	print ("Number balanced negatives: ", len(balancedDict['seqName']))
-	report.write("Number balanced negatives: " + str( len(balancedDict['seqName'])) + "\n")
+	#print ("total rows: ", total)
+	#report. write ("total rows: " + str(total) + "\n")
+	#print ("True positives remaining: ", total - numberFailedBoth)
+	#report.write("True positives remaining: " + str(total - numberFailedBoth) + "\n")
+	#print ("Number with left and right negatives: ", passedBoth)
+	#report.write("Number with left and right negatives: "+ str(passedBoth) + "\n")
+	#print ("Number with only left negative: ", passedLeftOnly)
+	#report.write("Number with only left negative: " + str(passedLeftOnly) + "\n")
+	#print ("Number with only right negative: ", passedRightOnly)
+	#report.write("Number with only right negative: " + str(passedRightOnly) + "\n")
+	#print ("Number balanced negatives: ", len(balancedDict['seqName']))
+	#report.write("Number balanced negatives: " + str( len(balancedDict['seqName'])) + "\n")
 	pasTypes = ['All', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU'] 
 	report.write("Positives dropped: " + "\n")
 	for t in pasTypes:
@@ -550,8 +546,8 @@ def createBalancedDatasets(chroName, bufferRegions, spacings, fastaPath):
 def makeNegativeDatasetsForGenome():
 	fastaPath = "../../aparentGenomeTesting/fastas/"
 	bufferRegions = [1,4]
-	spacing = [ 50, 75, 100]
-	chromosomes = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"]
+	spacing = [ 50]
+	chromosomes = ["Y", "1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X"]
 	for c in chromosomes:
 		createBalancedDatasets(c, bufferRegions, spacing, fastaPath)
 
@@ -665,7 +661,8 @@ def placePeaksWithTolerance(peaks, clustersNegative, clustersPositive, tolerance
 
 #using the peak-cluster dictionaries 
 #need to count TP, FP, FN (placed peaks, unplaced peaks, empty clusters)
-def fillConfMatrix(dictForwardPlus, dictForwardNegative, dictRCPlus, dictRCNegative):
+def fillConfMatrix(dictForwardPlus, dictForwardNegative, dictRCPlus, dictRCNegative, countOncePerCluster = True):
+#TODO: try counting all peaks that fall into known region as a TP or just that cluster once as a TP (may be overestimating fitness of model if we count multiple times?)
 	countTP = 0 #peaks in true cluster
 	countFP = 0 #peak in false cluster 
 	countFN = 0 #no peak in true cluster
@@ -793,14 +790,6 @@ def buildConfusionMatricesForGraphing(names, stem, bufferVal, spacing, minhs, di
 	
 
 
-#testing 
-names = ["21", "22", "Y"]
-stem = 
-	
-
-	
-	
-	
 
 
 	
@@ -808,7 +797,7 @@ stem =
 
 
 
-
+makeNegativeDatasetsForGenome()
 
 	
 
