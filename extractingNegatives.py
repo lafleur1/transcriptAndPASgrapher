@@ -212,34 +212,42 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 		if leftStart == leftEnd == rightStart == rightEnd == -2:
 			print ("Failed due to N's in true positive sequence")
 		leftRowDF = pd.DataFrame(leftRow)
+		#print (leftRowDF)
 		rightRowDF = pd.DataFrame(rightRow)
+		#print (rightRowDF)
+		#print (leftPassedAll, " ", rightPassedAll, " ", leftPassedBalanced, " ", rightPassedBalanced)
+		#input()
 		#All dataset
 		if leftPassedAll and rightPassedAll:
 			#add both to All dataset
-			negativesAllDF.append(leftRowDF)
-			negativesAllDF.append(rightRowDF)
+			negativesAllDF = negativesAllDF.append(leftRowDF)
+			negativesAllDF = negativesAllDF.append(rightRowDF)
+			#print (negativesAllDF)
 		elif leftPassedAll and not rightPassedAll:
 			#add left to dataset
-			negativesAllDF.append(leftRowDF)
+			#print ("LEFT PASSED")
+			negativesAllDF = negativesAllDF.append(leftRowDF)
 		elif not leftPassedAll and rightPassedAll:
 			#add right to dataset
-			negativesAllDF.append(rightRowDF)
+			#print ("RIGHT PASSED")
+			negativesAllDF = negativesAllDF.append(rightRowDF)
 		#balanced dataset 
 		if leftPassedBalanced and rightPassedBalanced:
+			#print ("BOTH PASSED")
 			#if both passed, flip coin and add one to balanced dataset
 			randInt = random.randint(0,1)
 			if randInt == 0: 
 				#add left to balanced
-				negativesBalancedDF.append(leftRowDF)
+				negativesBalancedDF = negativesBalancedDF.append(leftRowDF)
 			else:
 				#add right to balanced
-				negativesBalancedDF.append(rightRowDF)
+				negativesBalancedDF = negativesBalancedDF.append(rightRowDF)
 		elif leftPassedBalanced and not rightPassedBalanced:
 			#if only left, add left to balanced dataset
-			negativesBalancedDF.append(leftRowDF)
+			negativesBalancedDF = negativesBalancedDF.append(leftRowDF)
 		elif not leftPassedBalanced and rightPassedBalanced:
 			#if only right, add right to balanced dataset	
-			negativesBalancedDF.append(rightRowDF)
+			negativesBalancedDF = negativesBalancedDF.append(rightRowDF)
 		if not leftPassedBalanced and not rightPassedBalanced: #create balanced dataset
 			#numberFailedBoth += 1
 			#delete the row from the copy
@@ -247,6 +255,9 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 			copyTrueValues.drop(index = index, inplace = True)
 			print ("DROPPED: ", row['clusterID'], " ", row['type'])
 			droppedTypeList.append(row['type'])
+		#print ("CURRENT NEGATIVES:")
+		#print (negativesBalancedDF)
+		#print (negativesAllDF)
 	report = open("./reports/" + fileName + "DatasetsReport.txt", "w")
 	#print ("total rows: ", total)
 	#report. write ("total rows: " + str(total) + "\n")
@@ -266,14 +277,12 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 		print ("dropped ", droppedTypeList.count(t), " of type ", t)
 		report.write("dropped " + str(droppedTypeList.count(t)) + " of type " + t + "\n")
 	report.close()
-	asDataFrame = pd.DataFrame(blankDict)
-	balancedAsDataFrame = pd.DataFrame(balancedDict)
 	filteredTrueName = "./datasets/" + fileName + "BalancedPositives.csv"
 	allNegatives = "./datasets/" +  fileName + "AllNegatives.csv"
 	balancedNegatives ="./datasets/" +  fileName + "BalancedNegatives.csv"
 	copyTrueValues.to_csv(filteredTrueName)
-	asDataFrame.to_csv(allNegatives)
-	balancedAsDataFrame.to_csv(balancedNegatives)
+	negativesAllDF.to_csv(allNegatives)
+	negativesBalancedDF.to_csv(balancedNegatives)
 	
 
 

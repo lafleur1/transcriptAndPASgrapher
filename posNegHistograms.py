@@ -112,5 +112,5 @@ def createHistogramForPASType(typePAS = ""):
 	plt.legend()
 	plt.show()
 
-createHistogramForPASType("IN")
+createHistogramForPASType("TE")
 

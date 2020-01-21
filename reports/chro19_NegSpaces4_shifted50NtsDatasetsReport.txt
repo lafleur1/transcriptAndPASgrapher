@@ -1,10 +1,10 @@
 Positives dropped: 
 dropped 0 of type All
-dropped 109 of type IN
-dropped 1026 of type TE
-dropped 27 of type IG
-dropped 34 of type AI
-dropped 34 of type EX
-dropped 47 of type DS
-dropped 47 of type AE
-dropped 2 of type AU
+dropped 141 of type IN
+dropped 1189 of type TE
+dropped 42 of type IG
+dropped 50 of type AI
+dropped 40 of type EX
+dropped 72 of type DS
+dropped 125 of type AE
+dropped 6 of type AU
