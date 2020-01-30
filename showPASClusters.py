@@ -166,6 +166,9 @@ def find_peaks_ChromosomeVersion(avgPreds, peak_min_height, peak_min_distance, p
 	#forwardPeaks = find_peaks_ChromosomeVersion(forward, minh, dist, (0.01, None)) 
 	peaks, _ = find_peaks(avgPreds, height=peak_min_height, distance=peak_min_distance, prominence=peak_prominence) 
 	return peaks
+	
+	
+
 
 onChrY = openPASClustersForChromosome("Y")
 contigSeq = SeqIO.read("chrY.fasta", "fasta")
@@ -178,8 +181,9 @@ notFoundTwo = True
 posCurrent = 0
 
 while notFoundTwo:
+	contig = "Y"
 	genesDemo = ensembl.genes_at_locus(contig = "Y", position = posCurrent)
-	if len(genesDemo) > 1:
+	if len(genesDemo) >= 1:
 		#print (posCurrent)
 		#print (genesDemo)		
 		p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesDemo)
@@ -205,7 +209,7 @@ while notFoundTwo:
 		#print ('forward peaks: ', peaksForward)
 		#print ('peaksReverse: ', peaksReverse)
 		if len(peaksForward) > 0 or len(peaksReverse) > 0 :
-			mgraph = MultiGeneVariantPASDiagram(p, tn, gn, gp,  gs, pas_pos= preppedPASLocs, pas_types = preppedPASTypes, sequence = seqSlice, forwardValues = predForwardSlice, reverseValues = predReverseSlice, forwardPeaks = peaksForward, reversePeaks = peaksReverse)
+			mgraph = MultiGeneVariantPASDiagram(contig, p, tn, gn, gp,  gs, pas_pos= preppedPASLocs, pas_types = preppedPASTypes, sequence = seqSlice, forwardValues = predForwardSlice, reverseValues = predReverseSlice, forwardPeaks = peaksForward, reversePeaks = peaksReverse, showHAVANAAnnotations = True)
 			mgraph.show()
 		posCurrent += (stop - start)
 	else:
@@ -224,6 +228,7 @@ for i, row in igPAS.iterrows():
 	print (row)
 	start = int(row['start']) - 10000
 	stop = int(row['end']) + 10000
+	contig = "Y"
 	genesRound2 = ensembl.genes_at_locus(contig = "Y", position = start, end = stop)
 	#print (genesRound2)
 	for g in genesRound2:
@@ -238,11 +243,12 @@ for i, row in igPAS.iterrows():
 	p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesRound2)
 	pasPos, pasType = PASClusterToListFormatDoubleStrand(igPAS[igPAS['clusterID'] == row['clusterID']])
 	#print (pasPos, pasType)
-	mgraph = MultiGeneVariantPASDiagram(p, tn, gn, gp,  gs, pas_pos= pasPos, pas_types = pasType, startOverride = start, stopOverride = stop)
+	mgraph = MultiGeneVariantPASDiagram(contig, p, tn, gn, gp,  gs, pas_pos= pasPos, pas_types = pasType, startOverride = start, stopOverride = stop)
 	mgraph.show()
 '''
 
 '''
+contig = "Y"
 #examining AU pases on chromosome Y
 auPAS = onChrY[onChrY['type'] == 'AU']
 for i, row in auPAS.iterrows():
@@ -264,7 +270,7 @@ for i, row in auPAS.iterrows():
 	p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesRound2)
 	pasPos, pasType = PASClusterToListFormatDoubleStrand(auPAS[auPAS['clusterID'] == row['clusterID']])
 	#print (pasPos, pasType)
-	mgraph = MultiGeneVariantPASDiagram(p, tn, gn, gp,  gs, pas_pos= pasPos, pas_types = pasType, startOverride = start, stopOverride = stop)
+	mgraph = MultiGeneVariantPASDiagram(contig, p, tn, gn, gp,  gs, pas_pos= pasPos, pas_types = pasType, startOverride = start, stopOverride = stop)
 	mgraph.show()
 
 '''
@@ -275,6 +281,7 @@ for i, row in auPAS.iterrows():
 #examining areas with overlapping genes on chromosome Y
 notFoundTwo = True
 posCurrent = 6900000
+contig = "Y"
 while notFoundTwo:
 	genesDemo = ensembl.genes_at_locus(contig = "Y", position = posCurrent)
 	if len(genesDemo) > 1:
@@ -293,7 +300,7 @@ while notFoundTwo:
 		preppedPASLocs, preppedPASTypes = PASClusterToListFormatDoubleStrand(pasTable)
 		#print (preppedPASLocs)
 		#print (preppedPASTypes)
-		mgraph = MultiGeneVariantPASDiagram(p, tn, gn, gp,  gs, pas_pos= preppedPASLocs, pas_types = preppedPASTypes)
+		mgraph = MultiGeneVariantPASDiagram(contig, p, tn, gn, gp,  gs, pas_pos= preppedPASLocs, pas_types = preppedPASTypes)
 		mgraph.show()
 		posCurrent += (stop - start)
 	else:

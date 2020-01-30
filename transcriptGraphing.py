@@ -4,6 +4,9 @@ import numpy as np
 from matplotlib.patches import Patch, Circle
 from operator import itemgetter
 import random
+import pandas as pd
+
+
 
 
 
@@ -241,9 +244,19 @@ class MultiGeneVariantPASDiagram(object):
 		return colorsOut
 			
 			
-				
-	def __init__(self, transcript_positions, transcript_names, gene_names, gene_positions,  gene_strands, gene_colors = [], pas_pos=[], pas_types = [], startOverride = 0, stopOverride = 0, marker_heights=[], marker_size=100, marker_weight=1.5, intron_color="gray", intron_weight=1, intron_style='-', bar_color='gray', bg_color="white", diagramTitle = "", dropDownPASMarkers = True, sequence = "", forwardValues = [], reverseValues = [], forwardPeaks = [], reversePeaks = []):
+	def getHAVANAPolyANotationEnsemblInRange(self, chromosome, start, stop, showH):
+		#open polya signals, returns any signals with a start between the overall start/stop being graphed
+		if showH:
+			names = ["chr", "group", "type", "start", "end", "misc", "strand", "misc2", "other"]
+			chroName = "chr" + chromosome
+			annotations =pd.read_csv("gencode.v33.polyAs.gtf",delimiter='\t', names = names, comment = '#' ) #ignores comment lines at beginning of the GTF file'
+			return annotations[(annotations['chr'] == chroName) & (annotations['start'] >= start) & (annotations['start'] <= stop)]
+		else:
+			return []
+			
+	def __init__(self, chromosome, transcript_positions, transcript_names, gene_names, gene_positions,  gene_strands, gene_colors = [], pas_pos=[], pas_types = [], startOverride = 0, stopOverride = 0, marker_heights=[], marker_size=100, marker_weight=1.5, intron_color="gray", intron_weight=1, intron_style='-', bar_color='gray', bg_color="white", diagramTitle = "", dropDownPASMarkers = True, sequence = "", forwardValues = [], reverseValues = [], forwardPeaks = [], reversePeaks = [], showHAVANAAnnotations = False):
 		#chromosome sequence 
+		self.chromosome = chromosome
 		self.sequence = sequence #used to show location of N's on axis line
 		self.forwardCleavagePredictions = forwardValues 
 		self.reverseCleavagePredictions = reverseValues
@@ -286,6 +299,10 @@ class MultiGeneVariantPASDiagram(object):
 		self.markerSize = marker_size
 		self.MarkerWeight = marker_weight
 		self.colorKey = {'TE': "red", "EX": "salmon", "IN": "deepskyblue", "DS": "forestgreen", "AE": "darkred", "AI": "midnightblue", "AU": "limegreen", "IG": "gold"} #colors for the 8 PAS cluster types 
+		#['pseudo_polyA', 'polyA_signal', 'polyA_site']
+		self.colorKeyHAVANA = {"pseudo_polyA": "c", "polyA_signal": "m", "polyA_site": "y"}
+		self.showHAVANA = showHAVANAAnnotations
+		self.havanaPolyA = self.getHAVANAPolyANotationEnsemblInRange(self.chromosome, self.smallestIndex, self.largestIndex, self.showHAVANA) #get pandas rows of the dataframe with the polyA signals for both strands 
 		###graph stuff
 		self.dropDownPASMarkers = dropDownPASMarkers
 		self.diagramTitle = diagramTitle
@@ -300,6 +317,9 @@ class MultiGeneVariantPASDiagram(object):
 		self.canvas.set_facecolor(self.bgColor) 
 		self._draw() #draw the graph 
 
+	
+	
+	
 	#setting the other y mins and maxes for the intron line points and the overhead bar (exon min/max heights are set above)
 	def _set_limits(self):
 		self.ylims['intron_max'] = self.ylims['exon_width']*0.75
@@ -365,7 +385,9 @@ class MultiGeneVariantPASDiagram(object):
 			self.canvas.plot([span[0], mid], [minY, maxY], c=self.intronColor, lw=self.intronWeight, ls=self.intronStyle)
 			self.canvas.plot([mid, span[1]], [maxY, minY], c=self.intronColor, lw=self.intronWeight, ls=self.intronStyle)
 		return True #if successful in drawing the intron, return true		
-		
+	
+	
+	
 	def _draw_markers(self, yMax):
 		if self.pasPositions: #if they are given
 			#plus strand
@@ -393,7 +415,43 @@ class MultiGeneVariantPASDiagram(object):
 			self.canvas.add_artist(l2)
 			#ax.legend(loc='center left', bbox_to_anchor=(1, 0.5)))
 			
+	def _draw_HAVANA_markers(self, yMax):
+		if self.showHAVANA: #if they are given
+			print (self.havanaPolyA)
+			for index, row in self.havanaPolyA.iterrows():
+				#for each pas in the range
+				print (row)
+				print (row['type'])
+				markerColor = self.colorKeyHAVANA[row['type']]
+				if row['strand'] == "+": #lower half of graph
+					h = 0.5 
+					if self.dropDownPASMarkers:
+						h = 1.1 * yMax * (-1)
+					if row['start'] == row['end']:
+						#point 
+						self.canvas.plot((p, p), (0, h), linestyle='-', color=markerColor, linewidth=self.MarkerWeight)
+					else:
+						p = [row['start'], row['end']]
+						self.canvas.fill_between(p, 0, h, edgecolor= markerColor, facecolor= markerColor)
+							
+				else: #minus strand upper half of graph
+					h = 0.5 
+					if self.dropDownPASMarkers:
+						h = 1.1 * yMax
+					if row['start'] == row['end']:
+						#point 
+						self.canvas.plot((p, p), (0, h), linestyle='-', color=markerColor, linewidth=self.MarkerWeight)
+					else:
+						p = [row['start'], row['end']]
+						self.canvas.fill_between(p, 0, h, edgecolor= markerColor, facecolor= markerColor)
+			#self.colorKeyHAVANA = {'pseudo_polyA': "c", 'polyA_signal': "m", "polyA_site": "y"}
+			types = [Patch(facecolor='c', edgecolor='c', label='HAVANA psuedo_polyA'), 
+					Patch(facecolor='m', edgecolor='m', label='HAVANA polyA_signal'), 
+					Patch(facecolor='y', edgecolor='y', label='HAVANA polyA_site')]
+			l2 = plt.legend(handles=types, loc = 'center left', bbox_to_anchor = (1,0.5))
+			self.canvas.add_artist(l2)
 			
+	
 	def _draw_Peak_Markers(self, yMax):
 		#print ("forward peaks: ", self.forwardPeaks)
 		#print ("reverse peaks: ", self.reversePeaks)
@@ -412,7 +470,7 @@ class MultiGeneVariantPASDiagram(object):
 				h = 0.55 * yMax 
 			self.canvas.plot((p, p), (0, h), linestyle='-', color='black', linewidth=self.MarkerWeight)
 			
-			
+	
 			
 	#place markers between smallest/largest
 	def _clean_axes(self):
@@ -506,6 +564,7 @@ class MultiGeneVariantPASDiagram(object):
 		if self.diagramTitle:
 			plt.title(self.diagramTitle)
 		self._draw_markers(maxY) #draw markers with the default color for the diagram instance
+		self._draw_HAVANA_markers(maxY)
 		self._draw_Peak_Markers(maxY)
 		self._drawGeneBoundaries(maxY)
 		self._clean_axes()
