@@ -763,6 +763,33 @@ def piecewisePeaks(predictionsForward, predictionsRC, balancedPos, balancedNegs,
 			sliceAround = predictionsForward[start:end]
 			peaksInSlice = find_peaks_ChromosomeVersion(sliceAround, minh, dist, (0.01, None))
 			peaksInSliceCorrected = [x + start for x in peaksInSlice] #fix indexing issues that will have occured
+			x = [(peak >= row['start'] - tolerance) and (peak <= row['end'] + tolerance) for peak in peaksInSliceCorrected]
+			#since negatives are either +/- 50 nts from this position, they are also contained in this slice
+			if sum(x) > 0:
+				balancedPos.iloc[index, "peaksInRange"] += 1
+		else:
+			#correct indexes
+			rcIndexEnd = (predictionsForward.size -1) - row['start']
+			if rcIndexEnd + 500 > predictionsForward.size - 1:
+				end = predictionsForward.size -1
+			else:
+				end = rcIndexEnd + 500
+			rcIndexStart = (predictionsForward.size -1) - row['end']
+			if rcIndexStart - 500 < 0 :
+				start = 0
+			else:
+				start = rcIndexStart - 500
+			rcSlice = predictionsRC[start:end]
+			peaksInSlice = find_peaks_ChromosomeVersion(rcSlice, minh, dist, (0.01, None))
+			correctedIndexPeakInSlice = [x + rcIndexStart for x in peaksInSlice] #correct index with RC indexing
+			x = [(peak >= rcIndexStart - tolerance) and (peak <= rcIndexEnd + tolerance) for peak in correctedIndexPeakInSlice]
+			#since negatives are either +/- 50 nts from this position, they are also contained in this slice
+			if sum(x) > 0:
+				balancedPos.iloc[index, "peaksInRange"] += 1
+			
+			
+			
+				
 			
 
 
