@@ -747,10 +747,14 @@ def placePeaksWithToleranceDataFrameVersion(peaks, balancedPos, balancedNegs, to
 	return balancedPos, balancedNegs 
 
 
-def piecewisePeaks(predictionsForward, predictionsRC, balancedPos, balancedNegs, tolerance, sign,  minh, dist):
+def piecewisePeakPlacement(predictionsForward, predictionsRC, balancedPos, balancedNegs, tolerance, sign,  minh, dist):
 	#using scipy find peaks on a slice around the balanced pos/neg regions to speed up process, since find_peaks only works on nearby values
+	#newID = row['clusterID'] + "_LeftNegative"
+	#newID = row['clusterID'] + "_RightNegative"
 	for index, row in balancedPos.iterrows():
 		#for each row, slice the prediction numpy around it (1000 nts)
+		leftId = row['clusterID'] + "_LeftNegative"
+		rightId = row['clusterID'] + '_RightNegative'
 		if row['strand'] == "+":
 			if row['start'] - 500 < 0:
 				start = 0 
@@ -764,9 +768,24 @@ def piecewisePeaks(predictionsForward, predictionsRC, balancedPos, balancedNegs,
 			peaksInSlice = find_peaks_ChromosomeVersion(sliceAround, minh, dist, (0.01, None))
 			peaksInSliceCorrected = [x + start for x in peaksInSlice] #fix indexing issues that will have occured
 			x = [(peak >= row['start'] - tolerance) and (peak <= row['end'] + tolerance) for peak in peaksInSliceCorrected]
-			#since negatives are either +/- 50 nts from this position, they are also contained in this slice
 			if sum(x) > 0:
 				balancedPos.iloc[index, "peaksInRange"] += 1
+			#since negatives are either +/- 50 nts from this position, they are also contained in this slice
+			#check if left in negatives
+			searchLeftNegative = balancedNegs.index[balancedNegs['clusterID'] == leftId]
+			if not searchLeftNegative.empty:
+				#used left negative for balanced dataset
+				x = [(peak >= balancedNegs.start[searchLeftNegative] - tolerance) 
+					and (peak <= balancedNegs.end[searchLeftNegative] + tolerance) for peak in peaksInSliceCorrected]
+				if sum(x) > 0:
+					balancedNegs.iloc[searchLeftNegative, 'peaksInRange'] += 1
+			#search if used right negative in balanced dataset and increment peaks which fall in that range
+			searchRightNegative = balancedNegs.index[balancedNegs['clusterID'] == rightId]
+			if not searchRightNegative.empty:
+				x = [(peak >= balancedNegs.start[searchRightNegative] - tolerance) 
+					and (peak <= balancedNegs.end[searchRightNegative] + tolerance) for peak in peaksInSliceCorrected]
+				if sum(x) > 0:
+					balancedNegs.iloc[searchRightNegative, 'peaksInRange'] += 1
 		else:
 			#correct indexes
 			rcIndexEnd = (predictionsForward.size -1) - row['start']
@@ -786,11 +805,28 @@ def piecewisePeaks(predictionsForward, predictionsRC, balancedPos, balancedNegs,
 			#since negatives are either +/- 50 nts from this position, they are also contained in this slice
 			if sum(x) > 0:
 				balancedPos.iloc[index, "peaksInRange"] += 1
+			#check negatives in the same slice
+			searchLeftNegative = balancedNegs.index[balancedNegs['clusterID'] == leftId]
+			if not searchLeftNegative.empty:
+				#used left negative for balanced dataset
+				correctedStart = (predictionsForward.size - 1) - balancedNegs.end[searchLeftNegative]
+				corectedEnd = (predictionsForward.size - 1) - balancedNegs.start[searchLeftNegative]
+				x = [(peak >= correctedStart - tolerance) 
+					and (peak <= corectedEnd + tolerance) for peak in peaksInSliceCorrected]
+				if sum(x) > 0:
+					balancedNegs.iloc[searchLeftNegative, 'peaksInRange'] += 1
+			#search if used right negative in balanced dataset and increment peaks which fall in that range
+			searchRightNegative = balancedNegs.index[balancedNegs['clusterID'] == rightId]
+			if not searchRightNegative.empty:
+				correctedStart = (predictionsForward.size - 1) - balancedNegs.end[searchRightNegative]
+				corectedEnd = (predictionsForward.size - 1) - balancedNegs.start[searchRightNegative]
+				x = [(peak >= correctedStart - tolerance) 
+					and (peak <= corectedEnd + tolerance) for peak in peaksInSliceCorrected]
+				if sum(x) > 0:
+					balancedNegs.iloc[searchRightNegative, 'peaksInRange'] += 1
+	return balancedPos, balancedNegs
 			
-			
-			
-				
-			
+						
 
 
 def buildConfidenceMatrixOneChro(name, stem, b, s, minh, dist, tolerance, pasType = ""):
@@ -1030,6 +1066,9 @@ def buildAndSaveConfusionMatrices(names, stem, bufferVal, spacing, minhs, dist, 
 cutoffs = list(np.linspace(0,1.0,10))
 buildConfusionMatricesForGraphingDataFrameVersion(["Y"], "./datasets/", 1, 50, cutoffs, 50, 20, "testingChrYROC", "restingChrYPrecision", "TE")
 
+
+
+#testing the new peak placement strategy
 
 
 
