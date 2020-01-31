@@ -747,6 +747,24 @@ def placePeaksWithToleranceDataFrameVersion(peaks, balancedPos, balancedNegs, to
 	return balancedPos, balancedNegs 
 
 
+def piecewisePeaks(predictionsForward, predictionsRC, balancedPos, balancedNegs, tolerance, sign,  minh, dist):
+	#using scipy find peaks on a slice around the balanced pos/neg regions to speed up process, since find_peaks only works on nearby values
+	for index, row in balancedPos.iterrows():
+		#for each row, slice the prediction numpy around it (1000 nts)
+		if row['strand'] == "+":
+			if row['start'] - 500 < 0:
+				start = 0 
+			else:
+				start = row['start'] - 500
+			if row['end'] + 500 > predictionsForward.size -1:
+				end = predictionsForward.size-1
+			else:
+				end = row['end'] + 500
+			sliceAround = predictionsForward[start:end]
+			peaksInSlice = find_peaks_ChromosomeVersion(sliceAround, minh, dist, (0.01, None))
+			peaksInSliceCorrected = [x + start for x in peaksInSlice] #fix indexing issues that will have occured
+			
+
 
 def buildConfidenceMatrixOneChro(name, stem, b, s, minh, dist, tolerance, pasType = ""):
 	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
@@ -929,7 +947,61 @@ def buildConfusionMatricesForGraphing(names, stem, bufferVal, spacing, minhs, di
 	plt.show()
 
 
-buildConfusionMatricesForGraphingDataFrameVersion(["Y","22", "21"], "./datasets/", 1, 50, [ 0.005, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5], 50, 20, "testingChrYROC", "restingChrYPrecision", "TE")
+def buildConfusionMatricesForGraphingDataFrameVersion(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
+	confusionMatrices = []
+	for minh in minhs:
+		print ("ON: ", minh)
+		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomesDataFrameVersion(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
+	recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
+	precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
+	falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
+	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve
+	fractionPeaksUnplaced = [c.fractionUnplaced() for c in confusionMatrices] 
+	#graph ROC curve 
+	#add (0,0) and (1,0) points if they are not present?
+	print ("FPRS", falsePositiveRates)
+	print ("TPRS", truePositiveRates)
+	plt.plot(falsePositiveRates, truePositiveRates)
+	plt.title("ROC Curve")
+	plt.xlabel("FPR")
+	plt.ylabel("TPR")
+	plt.xlim(0,1.0)
+	plt.ylim(0,1.0)
+	plt.show()
+	#plot PR Curve
+	print ("recalls", recalls)
+	print ("precisions: ", precisions)
+	plt.plot(recalls, precisions)
+	plt.title("PR Curve")
+	plt.xlabel("Recall")
+	plt.ylabel("Precision")
+	plt.ylim(0,1.0)
+	plt.xlim(0,1.0)
+	plt.show()
+	#plot ratio of unplaced to minH value
+	plt.plot(minhs, fractionPeaksUnplaced)
+	plt.title("Fraction of peaks unplaced vs Minimum Height of Peak")
+	plt.xlabel("Peak Min Height")
+	plt.ylabel("Fraction of total peaks unplaced")
+	plt.ylim(0,1.0)
+	plt.xlim(0,1.0)
+	plt.show()
+
+
+def buildAndSaveConfusionMatrices(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
+	confusionMatrices = []
+	for minh in minhs:
+		print ("ON: ", minh)
+		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomesDataFrameVersion(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
+	recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
+	precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
+	falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
+	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve
+	fractionPeaksUnplaced = [c.fractionUnplaced() for c in confusionMatrices] 
+	
+
+cutoffs = list(np.linspace(0,1.0,10))
+buildConfusionMatricesForGraphingDataFrameVersion(["Y"], "./datasets/", 1, 50, cutoffs, 50, 20, "testingChrYROC", "restingChrYPrecision", "TE")
 
 
 
