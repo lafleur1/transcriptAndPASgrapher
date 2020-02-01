@@ -19,7 +19,7 @@ from scipy.signal import find_peaks
 
 #Note: Ensembl is 1-based, polyAsite is 0-based
 
-#rules used for database: 
+#rules used for polyAsite2.0 cluster classification: 
 '''
 if PAS in exon at the end of any transcript:
 	TE
@@ -44,7 +44,7 @@ else:
 ensembl = pyensembl.EnsemblRelease(release = '96')
 
 
-#MAKING NEGATIVE DATASETS #######################################################################
+######################################################################MAKING NEGATIVE DATASETS #######################################################################
 
 #opens human cluster data for given chromosome.  Can optionally filter by PAS type
 def openPASClustersForChromosome(name, pasType = 'All'):
@@ -61,8 +61,11 @@ def openPASClustersForChromosome(name, pasType = 'All'):
 		return maskedTrue
 
 
-
+#creates false dataset points per true dataset point
+#using the DeepPASTA/established APA DL method for creating negative datapoints by shifting the true valye +/- 50 nts and declaring that a 'false' APA site
 #fails the pos signal if there are "N" in the true region, or in the region used to predict the true pas region [start - 205, end + 205]
+#inputs: current row in the polyaSite2.0 dataframe, all the other PAS clusters in the polyAsite2.0 dataframe, all current negatives, current balanced negatives, the value used for spacing (how many of the cluster must fit between shifted groups), how much the cluster is shifted to create the false cluster position, the fasta sequence for the current chromosome (to look for N's in the input sequence for the network), strictNFiltering (true if sequences should be removed if there are N's in the input sequence used in APARENT), strictFilteringValue (used to find range to check for N's))
+#outputs:  leftPassedAll (if the left negative passed and shoutd be added to the overall dataset), rightPassedAll (if the right negative passed and should be added to the overall dataset), leftPassedBalanced (if the left negative passed and can be added to the balanced dataset), rightPassedBalanced (if the right negative passed and can be added to the balanced dataset), leftStart, leftEnd, rightStart, rightEnd (start/end values for the clusters)
 def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, currentAllNegs, currentBalancedNegs, spacingValue, shiftValue, fastaSeq, strictNFiltering = True, strictFilteringValue = 205):
 	#following Leung et al's true negative rules, count it as a negative if it can be shifted 50 nts and still fit four multiples of the negative region between it and the next polyA signal
 	#filtering positive signals for sequences with N's
@@ -145,25 +148,10 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, currentAllNegs, cu
 					rightPassedAll = True
 				if negativeBalanced.shape[0] == 0:
 					rightPassedBalanced = True
-			
 		else:
 			print ("Sequence rejected on right negative: ", rightSlice)
 			rightStart = -1
 			rightEnd = -1
-		#####
-		'''
-		if not rightPassed and not leftPassed:
-			print ("---------------------------------")
-			print (pasRow)
-			print ("RANGE :", leftCheck, " ", rightCheck)
-			print ("LEFT: ")
-			print (otherPAS1Left)
-			print (otherPAS2Left)
-			print ("RIGHT: ")
-			print (otherPAS1Right)
-			print (otherPAS2Right)
-			print ("----------------------------------")
-		'''
 		return leftPassedAll, rightPassedAll, leftPassedBalanced, rightPassedBalanced, leftStart, leftEnd, rightStart, rightEnd
 	else:
 		print ("Sequence rejected on positive region: ", filteringTrueSequence)
@@ -171,21 +159,23 @@ def shiftLeftAndRightNegativesFilterPositives(pasRow, allPAS, currentAllNegs, cu
 	
 
 
-
+#create the overall negative dataset and the balanced dataset for one chromosome
+#inputs: trueVals (polyAsite2.0 cluster dataframe for the chromosome), spacingValue (how many copies of the cluster to space between the created negative and any other positive clusters), shiftValue (how many nts to shift the positive cluster to make a negative cluster), fileName (name to save the datasets under), fastaSeq (overall chromosome sequence to use to remove sequences with N's)
+#outputs: saves a report file under ./reports/fileNameDatasetsReport.txt, saves datasets under ./datasets/fileNameBalancedPositives.csv, ./datasets/fileNameAllNegatives.csv,
+#./datasets/fileNameBalancedNegatives.csv
 def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq):
 	#create dictionary for negative valeus left and right 
 	#["seqName",  "start" , "end",  "clusterID",  "avgTPM",  "strand",   "percentSupporting",   "protocolsSupporting",  "avgTPM2",   "type",   "upstreamClusters"]
 	blankDict = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
 	balancedDict = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
 	droppedTypeList = []
-	copyTrueValues = trueVals.copy(deep = True) #make deep copy of dataframe
+	copyTrueValues = trueVals.copy(deep = True) #make deep copy of dataframe of the true pas values to filter
 	random.seed()
+	#setup the negative datasets
 	negativesAllDF = pd.DataFrame(blankDict)
 	negativesBalancedDF = pd.DataFrame(balancedDict)
 	for index, row in trueVals.iterrows():
-		#total += 1
-		#passedTrue += 1
-		leftPassedAll, rightPassedAll, leftPassedBalanced, rightPassedBalanced, leftStart, leftEnd, rightStart, rightEnd = shiftLeftAndRightNegativesFilterPositives(row, trueVals, negativesAllDF, negativesBalancedDF, spacingValue, shiftValue, fastaSeq)
+		leftPassedAll, rightPassedAll, leftPassedBalanced, rightPassedBalanced, leftStart, leftEnd, rightStart, rightEnd = shiftLeftAndRightNegativesFilterPositives(row, trueVals, negativesAllDF, negativesBalancedDF, spacingValue, shiftValue, fastaSeq) #determine which datasets to add the left/right negative clusters to
 		leftRow = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
 		rightRow = {"seqName":[], "start":[], "end":[], "clusterID":[], "strand":[], "type":[], "side":[]}
 		#fill left row
@@ -206,12 +196,14 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 		rightRow['strand'].append(row['strand'])
 		rightRow['type'].append(row['type'])
 		rightRow['side'].append("Right")
-		if leftStart == leftEnd == -1:
+		#print if the left/right clusters fail due to N's in the true cluster input ranges
+		if leftStart == leftEnd == -1: 
 			print ("Failed due to N's in left sequence")
 		if rightStart == rightEnd == -1:
 			print ("Failed due to N's in right sequence")
 		if leftStart == leftEnd == rightStart == rightEnd == -2:
 			print ("Failed due to N's in true positive sequence")
+		#prepare rows to be added to the overall datasets
 		leftRowDF = pd.DataFrame(leftRow)
 		rightRowDF = pd.DataFrame(rightRow)
 		if leftPassedAll and rightPassedAll:
@@ -240,13 +232,13 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 		elif not leftPassedBalanced and rightPassedBalanced:
 			#if only right, add right to balanced dataset	
 			negativesBalancedDF = negativesBalancedDF.append(rightRowDF)
-		if not leftPassedBalanced and not rightPassedBalanced: #create balanced dataset
-			#numberFailedBoth += 1
-			#delete the row from the copy
-			#passedTrue += -1
+		if not leftPassedBalanced and not rightPassedBalanced: 
+			#delete the row from the copy of the true values
 			copyTrueValues.drop(index = index, inplace = True)
 			print ("DROPPED: ", row['clusterID'], " ", row['type'])
 			droppedTypeList.append(row['type'])
+	###
+	#create a report of the types dropped for each chromosome
 	report = open("./reports/" + fileName + "DatasetsReport.txt", "w")
 	pasTypes = ['All', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU'] 
 	report.write("Positives dropped: " + "\n")
@@ -254,6 +246,8 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 		print ("dropped ", droppedTypeList.count(t), " of type ", t)
 		report.write("dropped " + str(droppedTypeList.count(t)) + " of type " + t + "\n")
 	report.close()
+	####
+	#save the datasets with to_csv for each chromosome 
 	filteredTrueName = "./datasets/" + fileName + "BalancedPositives.csv"
 	allNegatives = "./datasets/" +  fileName + "AllNegatives.csv"
 	balancedNegatives ="./datasets/" +  fileName + "BalancedNegatives.csv"
@@ -262,7 +256,9 @@ def createNegativeDataSet(trueVals, spacingValue, shiftValue, fileName, fastaSeq
 	negativesBalancedDF.to_csv(balancedNegatives)
 	
 
-
+#opens forward and reverse complement APARENT predictions for a chromosome
+#input: stem (file path the predictions are stored in), name (chromosome name)
+#output: forward strand predictions, reverse complement strand predictions
 def openForwardReverse(stem, name):
 	totalNameFor = stem + name + ".npy"
 	print (totalNameFor)
@@ -270,28 +266,89 @@ def openForwardReverse(stem, name):
 	reverse = np.load(stem + name + "RC.npy")
 	return forward, reverse
 
+
+#create balanced positive/negative datasets for one chromosome 
+#input: chroName (name of the chromosome the dataset is curently being generated for), bufferRegions (list of spacings to make datasets for), spacings (how much to shift each positive cluster to make a negative cluster), fastaPath (path where all fasta files are stored on the computer, uses these to remove any sequences with N's in the APARENT input range around a cluster)
+def createBalancedDatasets(chroName, bufferRegions, spacings, fastaPath):
+	#open fasta
+	totalName = fastaPath + "chr" + chroName + ".fasta"
+	chroSeq = SeqIO.read(totalName, "fasta")
+	print ("sequence length: ", len(chroSeq.seq))
+	currentTime = time.time()
+	print ("___________________________________")
+	print ("FASTA OPENED: ")
+	print (chroSeq)
+	print ("___________________________________")
+	#open PAS
+	openPAS = openPASClustersForChromosome(chroName, pasType= "All") #making a csv which can be filtered for individual PAS types as needed
+	for s in spacings:
+		for b in bufferRegions:
+			print ("___________________________________")
+			currentTime = time.time()
+			fileName = "chro" + chroName + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
+			print ("generating balanced datasets for: ")
+			print (fileName)
+			createNegativeDataSet(openPAS, b, s, fileName, chroSeq.seq)
+			print ("___________________________________")
+			print ("elapsed time: ", time.time() - currentTime)
+			print ("___________________________________")
+			print (" ")
+			
+#makes the balanced datasets for the entire genome.  
+#RUN THIS TO CREATE ALL BALANCED DATASETS FROM THE POLYASITE2.0 DATASET	
+def makeNegativeDatasetsForGenome():
+	fastaPath = "../../aparentGenomeTesting/fastas/"
+	bufferRegions = [1,4]
+	spacing = [ 50]
+	chromosomes = ["Y", "1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X"]
+	for c in chromosomes:
+		createBalancedDatasets(c, bufferRegions, spacing, fastaPath)
+
+
+def makeNegativeDatasetsForOneChromosome(chroName):
+	fastaPath = "../../aparentGenomeTesting/fastas/"
+	bufferRegions = [1,4]
+	spacing = [ 50, 75, 100]
+	createBalancedDatasets([chroName], bufferRegions, spacing, fastaPath)
+
+###############################################################################################################################################################################
+
+############################################################# APARENT ASSESSMENT #################################################################################
+
+############################# Scipy metrics ROC and PR Curves ##########################
+#docs for the curve functions at: 
+#https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_curve.html 
+#https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_curve.html 
+#scores:
+#https://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html#sklearn.metrics.average_precision_score 
+#https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html#sklearn.metrics.roc_auc_score
+
+#functions to open created datasets:
+#################
 def openAllNegatives(name):
 	negName = name + "AllNegatives.csv"
-	#colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
 	return pd.read_csv( negativesName,  dtype = {"seqName": str}) 
 
 def openBalancedNegatives(name):
 	negativesName = name + "BalancedNegatives.csv"
-	#colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
 	return pd.read_csv( negativesName, dtype = {"seqName": str}) 
 
 def openBalancedPositives(name):
 	positivesName = name + "BalancedPositives.csv"
-	#colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
 	return pd.read_csv( positivesName, dtype = {"seqName": str}) 
-	
+###############	
+
+#for extracting the values from a prediction numpy for a given chromosome
+#input: name (chromosome name to open values for and extract true/false cluster range values from), negatives (dataset to use to get values from numpy array), positives (dataset to use to get values from numpy array), pasType (does all pasTypes if not set.) 
+#outputs: dummybools, dummy #return all positve/negative values in one array, boolean labels for those values in other array
 def extractPredictionValues(name, negatives, positives, pasType = ""):
 	#making a sklearn AUC and AUPRC plot to look at different threshold values
 	dummy = np.array([])
 	dummybools = np.array([])
 	predName = "chr" + name
-	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
-	flippedReverse = np.flip(reverse)
+	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName) #open APARENT prediction values for the current chromosome
+	flippedReverse = np.flip(reverse) #flip reverse strand so that predictions are in the same order as the forward 5'->3' direction since all the clusters are indexed off of the forward 5'->3' in polyAsite2.0
+	#extract negative values
 	for index, row in negatives.iterrows():
 		startInt = int(row['start'])
 		endInt = int(row['end'])
@@ -323,6 +380,7 @@ def extractPredictionValues(name, negatives, positives, pasType = ""):
 					dummybools = np.concatenate((dummybools, np.zeros(sliceVals.size)))
 		else:
 			print ("ERROR!  Strand not listed for negative example")
+	#extract positive values
 	for index,row in positives.iterrows():
 		startInt = int(row['start'])
 		endInt = int(row['end'])
@@ -354,9 +412,11 @@ def extractPredictionValues(name, negatives, positives, pasType = ""):
 					dummybools = np.concatenate((dummybools, np.ones(sliceVals.size)))
 		else:
 			print ("ERROR!  Strand not listed for negative example")
-	return dummybools, dummy
+	return dummybools, dummy #return all positve/negative values in one array, boolean labels for those values in other array
 
-
+#use above function to extract values for multiple chromosomes
+#inputs: list of chromosome names to extract values for, stem (file path the balanced datasets are stored in), b (spacing value of how many copies of the cluster should fit between the negative cluster and the next true cluster), s (shift value, how far each positive cluster should be shifted to make the negative cluster), pasType (if values should only be extracted for one pasType)
+#output: aray of all extracted values, array of all extracted boolean labels for use with scipy's AUC functions
 def extractAllPredictionValues(names, stem, b, s, pasType = ""):
 	values = np.array([])
 	bools = np.array([])
@@ -364,13 +424,15 @@ def extractAllPredictionValues(names, stem, b, s, pasType = ""):
 		fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
 		negatives = openBalancedNegatives(fileName)
 		positives = openBalancedPositives(fileName)
-		boolsCurrent, valsCurrent = extractPredictionValues(name, negatives, positives, pasType)
+		boolsCurrent, valsCurrent = extractPredictionValues(name, negatives, positives, pasType) #use above function to open the predicted APARENT values for the chromosome clusters 
 		values = np.concatenate((values, valsCurrent))
 		bools = np.concatenate((bools, boolsCurrent))
 	return values, bools
 	
 
-
+#extract the values for the positive/negative clusters separately to look at distributions
+#inputs: name (chromsome name to extract values for), negatives (balanced dataset clusters to extract predictions for), positives (balance dataset clusters dataframe to extract predictions for), pasType (defaults to all the types)
+#outputs: dummyNegatives (all the negative prediction values), dummyPositives (all the positive prediction values)
 def extractPredictionValuesSeparateArrays(name, negatives, positives, pasType = ""):
 	#returns negative values and positive values
 	dummyNegatives = np.array([])
@@ -430,6 +492,8 @@ def extractPredictionValuesSeparateArrays(name, negatives, positives, pasType = 
 			print ("ERROR!  Strand not listed for negative example")
 	return dummyNegatives, dummyPositives
 
+#functions to find the best thresholds to use for a classifier for a AUC ROC plot
+############################################################3
 def maxPosDist45DegreeLine(fpr,tpr, threshs):
 	#fpr is x, tpr is y
 	#find the fpr,tpr,and threshold of the ROC point with the maximum positive distance from the 45 degree line
@@ -478,8 +542,12 @@ def minDistanceTopLeftCorner(fpr,tpr,threshs):
 		return fpr[minIndex], tpr[minIndex], threshs[minIndex], minDist
 	else:
 		return None
+#############################################3
 
-	
+#graph the predicted values in the positive/negative clusters from the balanced datasets
+#not using maximum peaks, just the values predicted in those cluster ranges
+#inputs: trueValsArray (the boolean labels for the predicted values in the positive and negative clusters) (numpy array), preds (the predicted values in the positive/negative clusters) (numpy array)
+#outputs: fpr (false positive rates from roc_curve),tpr (true positive rates from roc_curve),thresholds (thresholds from scipy roc_curve), auc_score (auc score for the ROC curve), prec (precisions for PR curve), rec (recalls for PR curve), thresholdsPR (thresholds from precision_recall_curve), auprc_score (average precision score)
 def computeAndGraphAllROCs(trueValsArray, preds):
 	#set up true value labels
 	print ("Total true labelled positions: ", np.sum(trueValsArray))
@@ -498,50 +566,8 @@ def computeAndGraphAllROCs(trueValsArray, preds):
 	return fpr,tpr,thresholds,auc_score, prec, rec, thresholdsPR, auprc_score
 
 
-
-
-
-def createBalancedDatasets(chroName, bufferRegions, spacings, fastaPath):
-	#open fasta
-	totalName = fastaPath + "chr" + chroName + ".fasta"
-	chroSeq = SeqIO.read(totalName, "fasta")
-	print ("sequence length: ", len(chroSeq.seq))
-	currentTime = time.time()
-	print ("___________________________________")
-	print ("FASTA OPENED: ")
-	print (chroSeq)
-	print ("___________________________________")
-	#open PAS
-	openPAS = openPASClustersForChromosome(chroName, pasType= "All") #making a csv which can be filtered for individual PAS types as needed
-	for s in spacings:
-		for b in bufferRegions:
-			print ("___________________________________")
-			currentTime = time.time()
-			fileName = "chro" + chroName + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
-			print ("generating balanced datasets for: ")
-			print (fileName)
-			createNegativeDataSet(openPAS, b, s, fileName, chroSeq.seq)
-			print ("___________________________________")
-			print ("elapsed time: ", time.time() - currentTime)
-			print ("___________________________________")
-			print (" ")
-			
-		
-def makeNegativeDatasetsForGenome():
-	fastaPath = "../../aparentGenomeTesting/fastas/"
-	bufferRegions = [1,4]
-	spacing = [ 50]
-	chromosomes = ["Y", "1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X"]
-	for c in chromosomes:
-		createBalancedDatasets(c, bufferRegions, spacing, fastaPath)
-
-
-def makeNegativeDatasetsForOneChromosome(chroName):
-	fastaPath = "../../aparentGenomeTesting/fastas/"
-	bufferRegions = [1,4]
-	spacing = [ 50, 75, 100]
-	createBalancedDatasets([chroName], bufferRegions, spacing, fastaPath)
-	
+#creates ROC and PR curves for genome, using default values unless changed 
+#TODO: add X to the total graph creation once I find those numpy values
 def makeGraphsAverageCleavageValues(b = 1, s = 50, typePas = ""):
 	chromosomes = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "Y"]
 	values, bools = extractAllPredictionValues(chromosomes, "./datasets/", b, s, typePas)
@@ -556,11 +582,20 @@ def makeGraphsAverageCleavageValues(b = 1, s = 50, typePas = ""):
 	plt.show()
 	
 
+#########################################################################################################################################
 
-############
-# CREATING CONFUSION MATRICS FOR PEAKS IN THE DATA #####################################################
-###########
 
+################## CREATING CONFUSION MATRICS FOR PEAKS IN THE DATA #####################################################
+
+'''
+Since we cannot use the scipy roc_curve or precision_recall_curve functions, we will have to manually extract peaks and calculate the false/true positives and negatives using the following criteria:
+TP:  If a true polyASite2.0 cluster has a predicted value peak in it
+FP: if a false cluster has a predicted value peak in it
+TN: if a false cluster does not have a predicted value peak in it
+FN: if a true cluster does not have a predicted value peak in it
+'''
+
+#confusion matrix class to use when calculating the 
 class peakConfusionMatrix(object):
 	def __init__(self, countTP, countFP, countFN, countTN , unplacedPredictions, totalPredictions):
 		self.truePositives = countTP
