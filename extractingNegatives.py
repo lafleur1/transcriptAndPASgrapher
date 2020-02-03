@@ -595,15 +595,15 @@ TN: if a false cluster does not have a predicted value peak in it
 FN: if a true cluster does not have a predicted value peak in it
 '''
 
-#confusion matrix class to use when calculating the 
+#confusion matrix class to use when calculating the ROC and PR curves for APARNET
 class peakConfusionMatrix(object):
 	def __init__(self, countTP, countFP, countFN, countTN , unplacedPredictions, totalPredictions):
 		self.truePositives = countTP
 		self.falsePositives = countFP
 		self.falseNegatives = countFN
 		self.trueNegatives = countTN
-		self.unplacedPredictions = unplacedPredictions
-		self.totalPredictionsMade = totalPredictions
+		self.unplacedPredictions = unplacedPredictions #number of unplaced predictions across the genomes(to use with dictionary based methods)
+		self.totalPredictionsMade = totalPredictions #number of peaks at the threshold level across the genome (to use with dictionary based methods)
 	
 	def truePositiveRate(self):
 	#AKA sensitivity, how good the model is at predicting the positive class when the actual outcome is positive
@@ -639,23 +639,57 @@ class peakConfusionMatrix(object):
 	def recall(self):
 		#Same as sensitvity AKA TPR
 		return self.truePositiveRate()
-		
+	
+	#return fraction of peaks not falling in a true/false cluster across the entire genome
 	def fractionUnplaced(self):
 		if self.totalPredictionsMade != 0:
 			return self.unplacedPredictions/self.totalPredictionsMade
 		else:
 			return 0 
-			
-	
-	
-	
+
 		
-#use to correct the indexes for the RC predictions so that they can be matched with the true cluster labels (since those are indexed according to the forward strand)
+#use to correct the indexes for the RC predictions so that they can be matched with the true cluster labels (since those are indexed according to the forward strand 5-> 3 direction)
 def flipSequenceIndex(index, lenSeq):
 	b = lenSeq - 1
 	return -1 * index + b
 
-		
+
+def find_peaks_ChromosomeVersion(avgPreds, peak_min_height, peak_min_distance, peak_prominence):
+	peaks, _ = find_peaks(avgPreds, height=peak_min_height, distance=peak_min_distance, prominence=peak_prominence) 
+	return peaks
+
+
+################################################################# DICTIONARY BASED METHODS #######################################################
+
+
+#creates forward and reverse strand dictionaries for the balanced dataset given to it
+#inputs: toSeparate (dataframe of true or false clusters to break into dictionary of clusters), pasType (pasType to place in dictionary)
+#outputs: clustersForward (dictionary of clusters on + strand), clustersRC (dictionary of clusters on - strand) #key is [start, end] for the cluster, contents is empty list
+def openBalancedValuesForType(toSeparate, pasType = ""):
+	clustersForward = {}
+	clustersRC = {} #key of (Start, End) will use to track clusters with no peaks for the FN  
+	if pasType == "":
+		for index, row in toSeparate.iterrows():
+			if row['strand'] == "+": #forward strand
+				clustersForward[(row['start'], row['end'])] = []
+			else: #negative strand, RC cluster
+				clustersRC[(row['start'], row['end'])] = []
+		clustersForward['Unplaced'] = []
+		clustersRC['Unplaced'] = []
+	else:
+		#dont bother with unplaced peaks if not doing all pasTypes if not looking for all types
+		maskType = toSeparate["type"] == pasType
+		maskedTrue = toSeparate[maskType]
+		for index, row in maskedTrue.iterrows():
+			if row['strand'] == "+": #forward strand
+				clustersForward[(row['start'], row['end'])] = []
+			else: #negative strand, RC cluster
+				clustersRC[(row['start'], row['end'])] = []	
+	return clustersForward, clustersRC
+
+#place peaks from APARENT into the cluster dictionaries
+#input: peaks (list of peaks to place in the dictionaries), clustersNegative (negative clusters dictionary), clustersPositive (positive clusters dictionary), tolerance (tolerance to place a peak in the cluster), sign (+/- strand ), lenSeq (lenght of the sequence peaks were extracted from )
+#output: clustersNegative (filled negative dictionary), clustersPositive (filled positive dictionary), numberUnplacedPeaks (number peaks not placed in a dictionary)
 def placePeaksWithTolerance(peaks, clustersNegative, clustersPositive, tolerance, sign, lenSeq):
 	clusterRangesNegative = clustersNegative.keys()
 	clusterRangesPositive = clustersPositive.keys()
@@ -686,17 +720,16 @@ def placePeaksWithTolerance(peaks, clustersNegative, clustersPositive, tolerance
 	return clustersNegative, clustersPositive, numberUnplacedPeaks
 
 
-
-#using the peak-cluster dictionaries 
+#using the peak-cluster dictionaries fill a confidence matrix for a given peak threshold
 #need to count TP, FP, FN (placed peaks, unplaced peaks, empty clusters)
+#inputs: dictForwardPlus (filled forward strand true cluster dictionary), dictForwardNegative (filled negative cluster forward strand dictionary), 
+#dictRCPlus (filled reverse complement true cluster dictionary), dictRCNegative (filled reverse complement false cluster dictionary), countOncePerCluster = True
+#outputs: countTP (count of true positives), countFP (count of false positives), countFN (count of false negatives), countTN (count of true negatives)
 def fillConfMatrix(dictForwardPlus, dictForwardNegative, dictRCPlus, dictRCNegative, countOncePerCluster = True):
-#TODO: try counting all peaks that fall into known region as a TP or just that cluster once as a TP (may be overestimating fitness of model if we count multiple times?)
 	countTP = 0 #peaks in true cluster
 	countFP = 0 #peak in false cluster 
 	countFN = 0 #no peak in true cluster
 	countTN = 0 #no peak in false cluster
-	#print (dictForwardNegative)
-	#print (dictRCNegative)
 	for key in dictForwardPlus:
 		inCluster = len(dictForwardPlus[key])
 		if inCluster != 0: #peak in a positive cluster
@@ -706,9 +739,9 @@ def fillConfMatrix(dictForwardPlus, dictForwardNegative, dictRCPlus, dictRCNegat
 	for key in dictRCPlus:
 		inCluster = len(dictRCPlus[key])
 		if inCluster != 0:
-			countTP += 1
+			countTP += 1 #peak in a positive cluster
 		else:
-			countFN += 1
+			countFN += 1 #empty true cluster
 	for key in dictForwardNegative:
 		inCluster = len(dictForwardNegative[key])
 		if inCluster != 0:
@@ -727,31 +760,99 @@ def fillConfMatrix(dictForwardPlus, dictForwardNegative, dictRCPlus, dictRCNegat
 			countTN += 1
 	return countTP, countFP, countFN, countTN
 			
+#fill a confidence matrix for one chromosome
+#input: name (chromosome name), stem (file path to the balanced dataset), b (spacing used to create dataset), s (shifted value used to create negative dataset), minh (minimum peak height for find_peaks), dist (distance between peaks for find_peaks), tolerance (tolerance for placing peaks into the clusters), pasType (pasType to create confidence matrix for) 
+#output: countTP, countFP, countFN, countTN, number unplaced peaks, total peaks
+def buildConfidenceMatrixOneChro(name, stem, b, s, minh, dist, tolerance, pasType = ""):
+	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
+	print ("Opening: ", fileName)
+	balancedPositives = openBalancedPositives(fileName)
+	balancedNegatives = openBalancedNegatives(fileName)
+	print ("Size balanced datasets: ", balancedPositives.shape[0])
+	clustersFPositve, clustersRCPositive = openBalancedValuesForType(balancedPositives, pasType)
+	clustersFNegative, clustersRCNegative = openBalancedValuesForType(balancedNegatives, pasType)
+	#open peaks for the forward and reverse strand predictions
+	predName = "chr" + name
+	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
+	forwardPeaks = find_peaks_ChromosomeVersion(forward, minh, dist, (0.01, None)) 
+	reversePeaks = find_peaks_ChromosomeVersion(reverse, minh, dist, (0.01, None)) 
+	print ("Peaks found: ", len(forwardPeaks), " ", len(reversePeaks))
+	#place peaks
+	clustersFNegative, clustersFPositve, numberUnplacedForward = placePeaksWithTolerance(forwardPeaks, clustersFNegative, clustersFPositve, tolerance, "+", forward.shape[0])
+	print ("Placed + strand peaks")
+	clustersRCNegative, clustersRCPositive, numberUnplacedReverse = placePeaksWithTolerance(reversePeaks, clustersRCNegative, clustersRCPositive, tolerance, "-", forward.shape[0])
+	print ("Placed - strand peaks")
+	countTP, countFP, countFN, countTN = fillConfMatrix(clustersFPositve, clustersFNegative, clustersRCPositive, clustersRCNegative)
+	return countTP, countFP, countFN, countTN, numberUnplacedForward + numberUnplacedReverse, len(forwardPeaks) + len(reversePeaks)
+	
 
-#creates forward and reverse strand dictionaries for the balanced dataset given to it
-def openBalancedValuesForType(toSeparate, pasType = ""):
-	clustersForward = {}
-	clustersRC = {} #key of (Start, End) will use to track clusters with no peaks for the FN  
-	if pasType == "":
-		for index, row in toSeparate.iterrows():
-			if row['strand'] == "+": #forward strand
-				clustersForward[(row['start'], row['end'])] = []
-			else: #negative strand, RC cluster
-				clustersRC[(row['start'], row['end'])] = []
-		clustersForward['Unplaced'] = []
-		clustersRC['Unplaced'] = []
-	else:
-		
-		maskType = toSeparate["type"] == pasType
-		maskedTrue = toSeparate[maskType]
-		for index, row in maskedTrue.iterrows():
-			if row['strand'] == "+": #forward strand
-				clustersForward[(row['start'], row['end'])] = []
-			else: #negative strand, RC cluster
-				clustersRC[(row['start'], row['end'])] = []
-	#print (clustersForward)	
-	return clustersForward, clustersRC
+#build confidence matrices for multiple chromosomes 
+#input: names (list of chromosome names), stem (file path), bufferVal (buffer value to use to make confidence matrix), spacing (how much clusters are shifted to make negative datasets), minh (minimum height to use for find_peaks), dist (distance between peaks for find_peaks), tolerance (tolerance to use for placing peaks in clusters), pasType (pasType to calculate confidence matrix for)
+#output: peakConfusionMatrix object
+def buildConfidenceMatrixMultipleChromosomes(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType = ""):
+	countTPOverall = 0
+	countFPOverall = 0
+	countFNOverall = 0
+	countTNOverall = 0
+	countUnplaced = 0
+	totalPeaks = 0
+	for name in names: #for each chromosome add values to overall count for making confidence matrix
+		print ("On chromosome: ", name)
+		countTP, countFP, countFN, countTN, unplaced, numberPeaks = buildConfidenceMatrixOneChro(name, stem, bufferVal, spacing, minh, dist, tolerance, pasType)
+		print ("TP:", "FP: ", "FN: ", "TN: ", "unplaced: ", "total: ")
+		countTPOverall += countTP
+		countFPOverall += countFP
+		countFNOverall += countFN
+		countTNOverall += countTN
+		countUnplaced += unplaced
+		totalPeaks += numberPeaks
+		print ("True Positives: ", countTPOverall, "False Positives: ", countFPOverall, "False Negatives: ", countFNOverall, "True Negatives: ", countTNOverall, "Unplaced: ",countUnplaced,  "Total Peaks: ", totalPeaks)
+	return peakConfusionMatrix(countTPOverall, countFPOverall, countFNOverall, countTNOverall, countUnplaced, totalPeaks)
+	
+	
 
+def buildConfusionMatricesForGraphing(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
+	confusionMatrices = []
+	for minh in minhs:
+		print ("ON: ", minh)
+		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomes(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
+	recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
+	precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
+	falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
+	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve
+	fractionPeaksUnplaced = [c.fractionUnplaced() for c in confusionMatrices] 
+	#graph ROC curve 
+	#add (0,0) and (1,0) points if they are not present?
+	print ("FPRS", falsePositiveRates)
+	print ("TPRS", truePositiveRates)
+	plt.plot(falsePositiveRates, truePositiveRates)
+	plt.title("ROC Curve")
+	plt.xlabel("FPR")
+	plt.ylabel("TPR")
+	plt.xlim(0,1.0)
+	plt.ylim(0,1.0)
+	plt.show()
+	#plot PR Curve
+	print ("recalls", recalls)
+	print ("precisions: ", precisions)
+	plt.plot(recalls, precisions)
+	plt.title("PR Curve")
+	plt.xlabel("Recall")
+	plt.ylabel("Precision")
+	plt.ylim(0,1.0)
+	plt.xlim(0,1.0)
+	plt.show()
+	#plot ratio of unplaced to minH value
+	plt.plot(minhs, fractionPeaksUnplaced)
+	plt.title("Fraction of peaks unplaced vs Minimum Height of Peak")
+	plt.xlabel("Peak Min Height")
+	plt.ylabel("Fraction of total peaks unplaced")
+	plt.ylim(0,1.0)
+	plt.xlim(0,1.0)
+	plt.show()
+
+	
+######################################################## Dataframe based methods #################################
 
 #creates forward and reverse strand dictionaries for the balanced dataset given to it
 def openBalancedValuesForTypeDataFrameVersion(toSeparate, pasType = ""):
@@ -763,10 +864,6 @@ def openBalancedValuesForTypeDataFrameVersion(toSeparate, pasType = ""):
 		return maskedTrue
 	else:
 		return toSeparate
-
-def find_peaks_ChromosomeVersion(avgPreds, peak_min_height, peak_min_distance, peak_prominence):
-	peaks, _ = find_peaks(avgPreds, height=peak_min_height, distance=peak_min_distance, prominence=peak_prominence) 
-	return peaks
 
 def placePeaksWithToleranceDataFrameVersion(peaks, balancedPos, balancedNegs, tolerance, sign, lenSeq):
 	numberUnplacedPeaks = 0
@@ -781,6 +878,101 @@ def placePeaksWithToleranceDataFrameVersion(peaks, balancedPos, balancedNegs, to
 			| ((balancedNegs['end'] <= peak) & (balancedNegs['end'] + tolerance >= peak))), "peaksInRange"] += 1
 	return balancedPos, balancedNegs 
 
+
+
+def fillConfMatrixDataFrameVersion( balancedPos, balancedNegs, totalPeaks, countOncePerCluster = True):
+	countTP = (balancedPos['peaksInRange'] > 0).sum() #peaks in true cluster
+	countFP = (balancedNegs['peaksInRange'] > 0).sum() #peak in false cluster 
+	countFN = (balancedPos['peaksInRange'] == 0).sum() #no peak in true cluster
+	countTN = (balancedNegs['peaksInRange'] == 0).sum() #no peak in false cluster
+	totalPeaksPlaced = balancedPos['peaksInRange'].sum() + balancedNegs['peaksInRange'].sum()
+	totalPeaksUnplaced = totalPeaks - totalPeaksPlaced
+	return countTP, countFP, countFN, countTN, totalPeaksUnplaced
+
+def buildConfidenceMatrixOneChroDataFrameVersion(name, stem, b, s, minh, dist, tolerance, pasType = ""):
+	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
+	print ("Opening: ", fileName)
+	balancedPositives = openBalancedPositives(fileName)
+	balancedNegatives = openBalancedNegatives(fileName)
+	print ("Size balanced datasets: ", balancedPositives.shape[0])
+	balancedPosWithCounts = openBalancedValuesForTypeDataFrameVersion(balancedPositives, pasType) 
+	balancedNegsWithCounts = openBalancedValuesForTypeDataFrameVersion(balancedNegatives, pasType)
+	#open peaks for the forward and reverse strand predictions
+	predName = "chr" + name
+	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
+	forwardPeaks = find_peaks_ChromosomeVersion(forward, minh, dist, (0.01, None)) 
+	reversePeaks = find_peaks_ChromosomeVersion(reverse, minh, dist, (0.01, None)) 
+	print ("Peaks found: ", len(forwardPeaks), " ", len(reversePeaks))
+	#place peaks
+	balancedPos, balancedNegs  = placePeaksWithToleranceDataFrameVersion(forwardPeaks, balancedPosWithCounts, balancedNegsWithCounts, tolerance, "+", forward.shape[0])
+	print ("Placed + strand peaks")
+	balancedPos, balancedNegs  = placePeaksWithToleranceDataFrameVersion(reversePeaks, balancedPos, balancedNegs, tolerance, "-", forward.shape[0])
+	print ("Placed - strand peaks")
+	totalPeaks = len(forwardPeaks) + len(reversePeaks)
+	countTP, countFP, countFN, countTN, totalUnplaced = fillConfMatrixDataFrameVersion( balancedPos, balancedNegs, totalPeaks) 
+	return countTP, countFP, countFN, countTN, totalUnplaced, totalPeaks
+
+
+def buildConfidenceMatrixMultipleChromosomesDataFrameVersion(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType = ""):
+	countTPOverall = 0
+	countFPOverall = 0
+	countFNOverall = 0
+	countTNOverall = 0
+	countUnplaced = 0
+	totalPeaks = 0
+	for name in names:
+		print ("On chromosome: ", name)
+		countTP, countFP, countFN, countTN, unplaced, numberPeaks = buildConfidenceMatrixOneChroDataFrameVersion(name, stem, bufferVal, spacing, minh, dist, tolerance, pasType)
+		countTPOverall += countTP
+		countFPOverall += countFP
+		countFNOverall += countFN
+		countTNOverall += countTN
+		countUnplaced += unplaced
+		totalPeaks += numberPeaks
+		print ("True Positives: ", countTPOverall, "False Positives: ", countFPOverall, "False Negatives: ", countFNOverall, "True Negatives: ", countTNOverall, "Unplaced: ",countUnplaced,  "Total Peaks: ", totalPeaks)
+	return peakConfusionMatrix(countTPOverall, countFPOverall, countFNOverall, countTNOverall, countUnplaced, totalPeaks)	
+	
+def buildConfusionMatricesForGraphingDataFrameVersion(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
+	confusionMatrices = []
+	for minh in minhs:
+		print ("ON: ", minh)
+		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomesDataFrameVersion(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
+	recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
+	precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
+	falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
+	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve
+	fractionPeaksUnplaced = [c.fractionUnplaced() for c in confusionMatrices] 
+	#graph ROC curve 
+	#add (0,0) and (1,0) points if they are not present?
+	print ("FPRS", falsePositiveRates)
+	print ("TPRS", truePositiveRates)
+	plt.plot(falsePositiveRates, truePositiveRates)
+	plt.title("ROC Curve")
+	plt.xlabel("FPR")
+	plt.ylabel("TPR")
+	plt.xlim(0,1.0)
+	plt.ylim(0,1.0)
+	plt.show()
+	#plot PR Curve
+	print ("recalls", recalls)
+	print ("precisions: ", precisions)
+	plt.plot(recalls, precisions)
+	plt.title("PR Curve")
+	plt.xlabel("Recall")
+	plt.ylabel("Precision")
+	plt.ylim(0,1.0)
+	plt.xlim(0,1.0)
+	plt.show()
+	#plot ratio of unplaced to minH value
+	plt.plot(minhs, fractionPeaksUnplaced)
+	plt.title("Fraction of peaks unplaced vs Minimum Height of Peak")
+	plt.xlabel("Peak Min Height")
+	plt.ylabel("Fraction of total peaks unplaced")
+	plt.ylim(0,1.0)
+	plt.xlim(0,1.0)
+	plt.show()
+	
+########################################################  Predicting peaks on a portion of the APARNET numpy arrays ####################################
 
 def piecewisePeakPlacement(predictionsForward, predictionsRC, balancedPos, balancedNegs, tolerance, sign,  minh, dist):
 	#using scipy find peaks on a slice around the balanced pos/neg regions to speed up process, since find_peaks only works on nearby values
@@ -861,230 +1053,7 @@ def piecewisePeakPlacement(predictionsForward, predictionsRC, balancedPos, balan
 					balancedNegs.iloc[searchRightNegative, 'peaksInRange'] += 1
 	return balancedPos, balancedNegs
 			
-						
-
-
-def buildConfidenceMatrixOneChro(name, stem, b, s, minh, dist, tolerance, pasType = ""):
-	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
-	print ("Opening: ", fileName)
-	balancedPositives = openBalancedPositives(fileName)
-	balancedNegatives = openBalancedNegatives(fileName)
-	print ("Size balanced datasets: ", balancedPositives.shape[0])
-	clustersFPositve, clustersRCPositive = openBalancedValuesForType(balancedPositives, pasType)
-	clustersFNegative, clustersRCNegative = openBalancedValuesForType(balancedNegatives, pasType)
-	#open peaks for the forward and reverse strand predictions
-	predName = "chr" + name
-	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
-	forwardPeaks = find_peaks_ChromosomeVersion(forward, minh, dist, (0.01, None)) 
-	reversePeaks = find_peaks_ChromosomeVersion(reverse, minh, dist, (0.01, None)) 
-	print ("Peaks found: ", len(forwardPeaks), " ", len(reversePeaks))
-	#place peaks
-	clustersFNegative, clustersFPositve, numberUnplacedForward = placePeaksWithTolerance(forwardPeaks, clustersFNegative, clustersFPositve, tolerance, "+", forward.shape[0])
-	print ("Placed + strand peaks")
-	clustersRCNegative, clustersRCPositive, numberUnplacedReverse = placePeaksWithTolerance(reversePeaks, clustersRCNegative, clustersRCPositive, tolerance, "-", forward.shape[0])
-	print ("Placed - strand peaks")
-	countTP, countFP, countFN, countTN = fillConfMatrix(clustersFPositve, clustersFNegative, clustersRCPositive, clustersRCNegative)
-	return countTP, countFP, countFN, countTN, numberUnplacedForward + numberUnplacedReverse, len(forwardPeaks) + len(reversePeaks)
-	
-
-
-def fillConfMatrixDataFrameVersion( balancedPos, balancedNegs, totalPeaks, countOncePerCluster = True):
-	countTP = (balancedPos['peaksInRange'] > 0).sum() #peaks in true cluster
-	countFP = (balancedNegs['peaksInRange'] > 0).sum() #peak in false cluster 
-	countFN = (balancedPos['peaksInRange'] == 0).sum() #no peak in true cluster
-	countTN = (balancedNegs['peaksInRange'] == 0).sum() #no peak in false cluster
-	totalPeaksPlaced = balancedPos['peaksInRange'].sum() + balancedNegs['peaksInRange'].sum()
-	totalPeaksUnplaced = totalPeaks - totalPeaksPlaced
-	return countTP, countFP, countFN, countTN, totalPeaksUnplaced
-
-def buildConfidenceMatrixOneChroDataFrameVersion(name, stem, b, s, minh, dist, tolerance, pasType = ""):
-	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
-	print ("Opening: ", fileName)
-	balancedPositives = openBalancedPositives(fileName)
-	balancedNegatives = openBalancedNegatives(fileName)
-	print ("Size balanced datasets: ", balancedPositives.shape[0])
-	balancedPosWithCounts = openBalancedValuesForTypeDataFrameVersion(balancedPositives, pasType) 
-	balancedNegsWithCounts = openBalancedValuesForTypeDataFrameVersion(balancedNegatives, pasType)
-	#open peaks for the forward and reverse strand predictions
-	predName = "chr" + name
-	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
-	forwardPeaks = find_peaks_ChromosomeVersion(forward, minh, dist, (0.01, None)) 
-	reversePeaks = find_peaks_ChromosomeVersion(reverse, minh, dist, (0.01, None)) 
-	print ("Peaks found: ", len(forwardPeaks), " ", len(reversePeaks))
-	#place peaks
-	balancedPos, balancedNegs  = placePeaksWithToleranceDataFrameVersion(forwardPeaks, balancedPosWithCounts, balancedNegsWithCounts, tolerance, "+", forward.shape[0])
-	print ("Placed + strand peaks")
-	balancedPos, balancedNegs  = placePeaksWithToleranceDataFrameVersion(reversePeaks, balancedPos, balancedNegs, tolerance, "-", forward.shape[0])
-	print ("Placed - strand peaks")
-	totalPeaks = len(forwardPeaks) + len(reversePeaks)
-	countTP, countFP, countFN, countTN, totalUnplaced = fillConfMatrixDataFrameVersion( balancedPos, balancedNegs, totalPeaks) 
-	return countTP, countFP, countFN, countTN, totalUnplaced, totalPeaks
-
-
-def buildConfidenceMatrixMultipleChromosomesDataFrameVersion(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType = ""):
-	countTPOverall = 0
-	countFPOverall = 0
-	countFNOverall = 0
-	countTNOverall = 0
-	countUnplaced = 0
-	totalPeaks = 0
-	for name in names:
-		print ("On chromosome: ", name)
-		countTP, countFP, countFN, countTN, unplaced, numberPeaks = buildConfidenceMatrixOneChroDataFrameVersion(name, stem, bufferVal, spacing, minh, dist, tolerance, pasType)
-		countTPOverall += countTP
-		countFPOverall += countFP
-		countFNOverall += countFN
-		countTNOverall += countTN
-		countUnplaced += unplaced
-		totalPeaks += numberPeaks
-		print ("True Positives: ", countTPOverall, "False Positives: ", countFPOverall, "False Negatives: ", countFNOverall, "True Negatives: ", countTNOverall, "Unplaced: ",countUnplaced,  "Total Peaks: ", totalPeaks)
-	return peakConfusionMatrix(countTPOverall, countFPOverall, countFNOverall, countTNOverall, countUnplaced, totalPeaks)
-	
-
-
-def buildConfidenceMatrixMultipleChromosomes(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType = ""):
-	countTPOverall = 0
-	countFPOverall = 0
-	countFNOverall = 0
-	countTNOverall = 0
-	countUnplaced = 0
-	totalPeaks = 0
-	for name in names:
-		print ("On chromosome: ", name)
-		countTP, countFP, countFN, countTN, unplaced, numberPeaks = buildConfidenceMatrixOneChro(name, stem, bufferVal, spacing, minh, dist, tolerance, pasType)
-		print ("TP:", "FP: ", "FN: ", "TN: ", "unplaced: ", "total: ")
-		countTPOverall += countTP
-		countFPOverall += countFP
-		countFNOverall += countFN
-		countTNOverall += countTN
-		countUnplaced += unplaced
-		totalPeaks += numberPeaks
-		print ("True Positives: ", countTPOverall, "False Positives: ", countFPOverall, "False Negatives: ", countFNOverall, "True Negatives: ", countTNOverall, "Unplaced: ",countUnplaced,  "Total Peaks: ", totalPeaks)
-	return peakConfusionMatrix(countTPOverall, countFPOverall, countFNOverall, countTNOverall, countUnplaced, totalPeaks)
-	
-
-def buildConfusionMatricesForGraphingDataFrameVersion(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
-	confusionMatrices = []
-	for minh in minhs:
-		print ("ON: ", minh)
-		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomesDataFrameVersion(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
-	recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
-	precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
-	falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
-	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve
-	fractionPeaksUnplaced = [c.fractionUnplaced() for c in confusionMatrices] 
-	#graph ROC curve 
-	#add (0,0) and (1,0) points if they are not present?
-	print ("FPRS", falsePositiveRates)
-	print ("TPRS", truePositiveRates)
-	plt.plot(falsePositiveRates, truePositiveRates)
-	plt.title("ROC Curve")
-	plt.xlabel("FPR")
-	plt.ylabel("TPR")
-	plt.xlim(0,1.0)
-	plt.ylim(0,1.0)
-	plt.show()
-	#plot PR Curve
-	print ("recalls", recalls)
-	print ("precisions: ", precisions)
-	plt.plot(recalls, precisions)
-	plt.title("PR Curve")
-	plt.xlabel("Recall")
-	plt.ylabel("Precision")
-	plt.ylim(0,1.0)
-	plt.xlim(0,1.0)
-	plt.show()
-	#plot ratio of unplaced to minH value
-	plt.plot(minhs, fractionPeaksUnplaced)
-	plt.title("Fraction of peaks unplaced vs Minimum Height of Peak")
-	plt.xlabel("Peak Min Height")
-	plt.ylabel("Fraction of total peaks unplaced")
-	plt.ylim(0,1.0)
-	plt.xlim(0,1.0)
-	plt.show()
-
-
-def buildConfusionMatricesForGraphing(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
-	confusionMatrices = []
-	for minh in minhs:
-		print ("ON: ", minh)
-		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomes(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
-	recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
-	precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
-	falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
-	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve
-	fractionPeaksUnplaced = [c.fractionUnplaced() for c in confusionMatrices] 
-	#graph ROC curve 
-	#add (0,0) and (1,0) points if they are not present?
-	print ("FPRS", falsePositiveRates)
-	print ("TPRS", truePositiveRates)
-	plt.plot(falsePositiveRates, truePositiveRates)
-	plt.title("ROC Curve")
-	plt.xlabel("FPR")
-	plt.ylabel("TPR")
-	plt.xlim(0,1.0)
-	plt.ylim(0,1.0)
-	plt.show()
-	#plot PR Curve
-	print ("recalls", recalls)
-	print ("precisions: ", precisions)
-	plt.plot(recalls, precisions)
-	plt.title("PR Curve")
-	plt.xlabel("Recall")
-	plt.ylabel("Precision")
-	plt.ylim(0,1.0)
-	plt.xlim(0,1.0)
-	plt.show()
-	#plot ratio of unplaced to minH value
-	plt.plot(minhs, fractionPeaksUnplaced)
-	plt.title("Fraction of peaks unplaced vs Minimum Height of Peak")
-	plt.xlabel("Peak Min Height")
-	plt.ylabel("Fraction of total peaks unplaced")
-	plt.ylim(0,1.0)
-	plt.xlim(0,1.0)
-	plt.show()
-
-
-def buildConfusionMatricesForGraphingDataFrameVersion(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
-	confusionMatrices = []
-	for minh in minhs:
-		print ("ON: ", minh)
-		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomesDataFrameVersion(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
-	recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
-	precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
-	falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
-	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve
-	fractionPeaksUnplaced = [c.fractionUnplaced() for c in confusionMatrices] 
-	#graph ROC curve 
-	#add (0,0) and (1,0) points if they are not present?
-	print ("FPRS", falsePositiveRates)
-	print ("TPRS", truePositiveRates)
-	plt.plot(falsePositiveRates, truePositiveRates)
-	plt.title("ROC Curve")
-	plt.xlabel("FPR")
-	plt.ylabel("TPR")
-	plt.xlim(0,1.0)
-	plt.ylim(0,1.0)
-	plt.show()
-	#plot PR Curve
-	print ("recalls", recalls)
-	print ("precisions: ", precisions)
-	plt.plot(recalls, precisions)
-	plt.title("PR Curve")
-	plt.xlabel("Recall")
-	plt.ylabel("Precision")
-	plt.ylim(0,1.0)
-	plt.xlim(0,1.0)
-	plt.show()
-	#plot ratio of unplaced to minH value
-	plt.plot(minhs, fractionPeaksUnplaced)
-	plt.title("Fraction of peaks unplaced vs Minimum Height of Peak")
-	plt.xlabel("Peak Min Height")
-	plt.ylabel("Fraction of total peaks unplaced")
-	plt.ylim(0,1.0)
-	plt.xlim(0,1.0)
-	plt.show()
-
+					
 
 def buildAndSaveConfusionMatrices(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
 	confusionMatrices = []
@@ -1100,10 +1069,6 @@ def buildAndSaveConfusionMatrices(names, stem, bufferVal, spacing, minhs, dist, 
 
 cutoffs = list(np.linspace(0,1.0,10))
 buildConfusionMatricesForGraphingDataFrameVersion(["Y"], "./datasets/", 1, 50, cutoffs, 50, 20, "testingChrYROC", "restingChrYPrecision", "TE")
-
-
-
-#testing the new peak placement strategy
 
 
 
