@@ -597,7 +597,7 @@ FN: if a true cluster does not have a predicted value peak in it
 
 #confusion matrix class to use when calculating the ROC and PR curves for APARNET
 class peakConfusionMatrix(object):
-	def __init__(self, countTP, countFP, countFN, countTN , unplacedPredictions, totalPredictions):
+	def __init__(self, countTP, countFP, countFN, countTN , unplacedPredictions = 0, totalPredictions = 0):
 		self.truePositives = countTP
 		self.falsePositives = countFP
 		self.falseNegatives = countFN
@@ -654,7 +654,7 @@ def flipSequenceIndex(index, lenSeq):
 	return -1 * index + b
 
 
-def find_peaks_ChromosomeVersion(avgPreds, peak_min_height, peak_min_distance, peak_prominence):
+def find_peaks_ChromosomeVersion(avgPreds, peak_min_height, peak_min_distance, peak_prominence = None):
 	peaks, _ = find_peaks(avgPreds, height=peak_min_height, distance=peak_min_distance, prominence=peak_prominence) 
 	return peaks
 
@@ -880,14 +880,23 @@ def placePeaksWithToleranceDataFrameVersion(peaks, balancedPos, balancedNegs, to
 
 
 
-def fillConfMatrixDataFrameVersion( balancedPos, balancedNegs, totalPeaks, countOncePerCluster = True):
+def fillConfMatrixDataFrameVersion( balancedPos, balancedNegs, totalPeaks = 0, countOncePerCluster = True):
 	countTP = (balancedPos['peaksInRange'] > 0).sum() #peaks in true cluster
 	countFP = (balancedNegs['peaksInRange'] > 0).sum() #peak in false cluster 
 	countFN = (balancedPos['peaksInRange'] == 0).sum() #no peak in true cluster
 	countTN = (balancedNegs['peaksInRange'] == 0).sum() #no peak in false cluster
-	totalPeaksPlaced = balancedPos['peaksInRange'].sum() + balancedNegs['peaksInRange'].sum()
-	totalPeaksUnplaced = totalPeaks - totalPeaksPlaced
-	return countTP, countFP, countFN, countTN, totalPeaksUnplaced
+	#print ("POS VALS: ")
+	#print (balancedPos[(balancedPos['strand'] == '-') & (balancedPos['peaksInRange'] != 0)])
+	#print (balancedPos[(balancedPos['strand'] == '+') & (balancedPos['peaksInRange'] != 0)])
+	#print ("NEG VALS: ")
+	#print (balancedNegs[(balancedNegs['strand'] == '-') & (balancedNegs['peaksInRange'] != 0)])
+	#print (balancedNegs[(balancedNegs['strand'] == '+') & (balancedNegs['peaksInRange'] != 0)])
+	if totalPeaks != 0:
+		totalPeaksPlaced = balancedPos['peaksInRange'].sum() + balancedNegs['peaksInRange'].sum()
+		totalPeaksUnplaced = totalPeaks - totalPeaksPlaced
+		return countTP, countFP, countFN, countTN, totalPeaksUnplaced
+	else: #no total peaks are given...piecewise computation
+		return countTP, countFP, countFN, countTN, -1
 
 def buildConfidenceMatrixOneChroDataFrameVersion(name, stem, b, s, minh, dist, tolerance, pasType = ""):
 	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
@@ -897,6 +906,7 @@ def buildConfidenceMatrixOneChroDataFrameVersion(name, stem, b, s, minh, dist, t
 	print ("Size balanced datasets: ", balancedPositives.shape[0])
 	balancedPosWithCounts = openBalancedValuesForTypeDataFrameVersion(balancedPositives, pasType) 
 	balancedNegsWithCounts = openBalancedValuesForTypeDataFrameVersion(balancedNegatives, pasType)
+	print ("Size balanced w/ new col: ", balancedPosWithCounts.shape)
 	#open peaks for the forward and reverse strand predictions
 	predName = "chr" + name
 	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
@@ -974,7 +984,8 @@ def buildConfusionMatricesForGraphingDataFrameVersion(names, stem, bufferVal, sp
 	
 ########################################################  Predicting peaks on a portion of the APARNET numpy arrays ####################################
 
-def piecewisePeakPlacement(predictionsForward, predictionsRC, balancedPos, balancedNegs, tolerance, sign,  minh, dist):
+
+def piecewisePeakPlacement(predictionsForward, predictionsRC, balancedPos, balancedNegs, tolerance, minh, dist):
 	#using scipy find peaks on a slice around the balanced pos/neg regions to speed up process, since find_peaks only works on nearby values
 	#newID = row['clusterID'] + "_LeftNegative"
 	#newID = row['clusterID'] + "_RightNegative"
@@ -992,83 +1003,160 @@ def piecewisePeakPlacement(predictionsForward, predictionsRC, balancedPos, balan
 			else:
 				end = row['end'] + 500
 			sliceAround = predictionsForward[start:end]
-			peaksInSlice = find_peaks_ChromosomeVersion(sliceAround, minh, dist, (0.01, None))
+			peaksInSlice = find_peaks_ChromosomeVersion(sliceAround, minh, dist)
+			#print ("start: ", start,  " end: ", end)
+			#print (peaksInSlice)
+			#print ("number of peaks in slice: ", len(peaksInSlice), "minh: ", minh, "distance: ", dist)
 			peaksInSliceCorrected = [x + start for x in peaksInSlice] #fix indexing issues that will have occured
+			#print (peaksInSliceCorrected)
 			x = [(peak >= row['start'] - tolerance) and (peak <= row['end'] + tolerance) for peak in peaksInSliceCorrected]
+			#print (x)
+			#input()
 			if sum(x) > 0:
-				balancedPos.iloc[index, "peaksInRange"] += 1
+				#print ("INDEX: ", index)
+				balancedPos.loc[index, "peaksInRange"] += 1
 			#since negatives are either +/- 50 nts from this position, they are also contained in this slice
 			#check if left in negatives
 			searchLeftNegative = balancedNegs.index[balancedNegs['clusterID'] == leftId]
 			if not searchLeftNegative.empty:
 				#used left negative for balanced dataset
-				x = [(peak >= balancedNegs.start[searchLeftNegative] - tolerance) 
-					and (peak <= balancedNegs.end[searchLeftNegative] + tolerance) for peak in peaksInSliceCorrected]
+				#print ("left start: ", balancedNegs.start[searchLeftNegative].values[0])
+				x = [(peak >= balancedNegs.start[searchLeftNegative].values[0] - tolerance) 
+					and (peak <= balancedNegs.end[searchLeftNegative].values[0] + tolerance) for peak in peaksInSliceCorrected]
 				if sum(x) > 0:
-					balancedNegs.iloc[searchLeftNegative, 'peaksInRange'] += 1
+					balancedNegs.loc[searchLeftNegative, 'peaksInRange'] += 1
 			#search if used right negative in balanced dataset and increment peaks which fall in that range
 			searchRightNegative = balancedNegs.index[balancedNegs['clusterID'] == rightId]
 			if not searchRightNegative.empty:
-				x = [(peak >= balancedNegs.start[searchRightNegative] - tolerance) 
-					and (peak <= balancedNegs.end[searchRightNegative] + tolerance) for peak in peaksInSliceCorrected]
+				x = [(peak >= balancedNegs.start[searchRightNegative].values[0] - tolerance) 
+					and (peak <= balancedNegs.end[searchRightNegative].values[0] + tolerance) for peak in peaksInSliceCorrected]
 				if sum(x) > 0:
-					balancedNegs.iloc[searchRightNegative, 'peaksInRange'] += 1
+					balancedNegs.loc[searchRightNegative, 'peaksInRange'] += 1
 		else:
 			#correct indexes
 			rcIndexEnd = (predictionsForward.size -1) - row['start']
+			#print ("total size: ", predictionsForward.size)
+			#print ("row start: ", row['start'], " corr end: ", rcIndexEnd)
 			if rcIndexEnd + 500 > predictionsForward.size - 1:
 				end = predictionsForward.size -1
 			else:
 				end = rcIndexEnd + 500
 			rcIndexStart = (predictionsForward.size -1) - row['end']
+			#print ("row ens: ", row['end'], " corr start: ", rcIndexStart)
 			if rcIndexStart - 500 < 0 :
 				start = 0
 			else:
 				start = rcIndexStart - 500
 			rcSlice = predictionsRC[start:end]
-			peaksInSlice = find_peaks_ChromosomeVersion(rcSlice, minh, dist, (0.01, None))
-			correctedIndexPeakInSlice = [x + rcIndexStart for x in peaksInSlice] #correct index with RC indexing
-			x = [(peak >= rcIndexStart - tolerance) and (peak <= rcIndexEnd + tolerance) for peak in correctedIndexPeakInSlice]
+			peaksInSlice = find_peaks_ChromosomeVersion(rcSlice, minh, dist)
+			peaksInSliceCorrected = [x + rcIndexStart for x in peaksInSlice] #correct index with RC indexing
+			x = [(peak >= rcIndexStart - tolerance) and (peak <= rcIndexEnd + tolerance) for peak in peaksInSliceCorrected]
 			#since negatives are either +/- 50 nts from this position, they are also contained in this slice
 			if sum(x) > 0:
-				balancedPos.iloc[index, "peaksInRange"] += 1
+				balancedPos.loc[index, "peaksInRange"] += 1
 			#check negatives in the same slice
 			searchLeftNegative = balancedNegs.index[balancedNegs['clusterID'] == leftId]
 			if not searchLeftNegative.empty:
 				#used left negative for balanced dataset
-				correctedStart = (predictionsForward.size - 1) - balancedNegs.end[searchLeftNegative]
-				corectedEnd = (predictionsForward.size - 1) - balancedNegs.start[searchLeftNegative]
+				correctedStart = (predictionsForward.size - 1) - balancedNegs.end[searchLeftNegative].values[0]
+				correctedEnd = (predictionsForward.size - 1) - balancedNegs.start[searchLeftNegative].values[0]
 				x = [(peak >= correctedStart - tolerance) 
-					and (peak <= corectedEnd + tolerance) for peak in peaksInSliceCorrected]
+					and (peak <= correctedEnd + tolerance) for peak in peaksInSliceCorrected]
 				if sum(x) > 0:
-					balancedNegs.iloc[searchLeftNegative, 'peaksInRange'] += 1
+					balancedNegs.loc[searchLeftNegative, 'peaksInRange'] += 1
 			#search if used right negative in balanced dataset and increment peaks which fall in that range
 			searchRightNegative = balancedNegs.index[balancedNegs['clusterID'] == rightId]
 			if not searchRightNegative.empty:
-				correctedStart = (predictionsForward.size - 1) - balancedNegs.end[searchRightNegative]
-				corectedEnd = (predictionsForward.size - 1) - balancedNegs.start[searchRightNegative]
+				correctedStart = (predictionsForward.size - 1) - balancedNegs.end[searchRightNegative].values[0]
+				correctedEnd = (predictionsForward.size - 1) - balancedNegs.start[searchRightNegative].values[0]
 				x = [(peak >= correctedStart - tolerance) 
-					and (peak <= corectedEnd + tolerance) for peak in peaksInSliceCorrected]
+					and (peak <= correctedEnd + tolerance) for peak in peaksInSliceCorrected]
 				if sum(x) > 0:
-					balancedNegs.iloc[searchRightNegative, 'peaksInRange'] += 1
+					balancedNegs.loc[searchRightNegative, 'peaksInRange'] += 1
 	return balancedPos, balancedNegs
 			
-					
+def buildConfidenceMatrixOneChroPiecewise(name, stem, b, s, minh, dist, tolerance, pasType = ""):
+	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
+	print ("Opening: ", fileName)
+	balancedPositives = openBalancedPositives(fileName)
+	balancedNegatives = openBalancedNegatives(fileName)
+	#add peaksInRange column to count peaks in the cluster/empty clusters
+	balancedPosWithCounts = openBalancedValuesForTypeDataFrameVersion(balancedPositives, pasType) 
+	balancedNegsWithCounts = openBalancedValuesForTypeDataFrameVersion(balancedNegatives, pasType)
+	#print (balancedPosWithCounts)
+	#open peaks for the forward and reverse strand predictions
+	predName = "chr" + name
+	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
+	balancedPos, balancedNegs = piecewisePeakPlacement(forward, reverse, balancedPosWithCounts, balancedNegsWithCounts, tolerance, minh, dist)
+	countTP, countFP, countFN, countTN, dummy = fillConfMatrixDataFrameVersion( balancedPos, balancedNegs) #should still be able to score these the same way, adding default of totalPeaks = [] if not provided, will return -1 for the dummy var
+	return countTP, countFP, countFN, countTN
+	
 
-def buildAndSaveConfusionMatrices(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
+
+def buildConfidenceMatrixMultipleChromosomesPiecewise(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType = ""):
+	countTPOverall = 0
+	countFPOverall = 0
+	countFNOverall = 0
+	countTNOverall = 0
+	#countUnplaced = 0
+	#totalPeaks = 0
+	for name in names:
+		print ("--------------------------------------------------")
+		print ("On chromosome: ", name)
+		countTP, countFP, countFN, countTN = buildConfidenceMatrixOneChroPiecewise(name, stem, bufferVal, spacing, minh, dist, tolerance, pasType)
+		countTPOverall += countTP
+		countFPOverall += countFP
+		countFNOverall += countFN
+		countTNOverall += countTN
+		print ("True Positives: ", countTPOverall, "False Positives: ", countFPOverall, "False Negatives: ", countFNOverall, "True Negatives: ", countTNOverall)
+		print ("--------------------------------------------------")
+	return peakConfusionMatrix(countTPOverall, countFPOverall, countFNOverall, countTNOverall)					
+
+def buildConfusionMatricesForGraphingPiecewise(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
 	confusionMatrices = []
 	for minh in minhs:
 		print ("ON: ", minh)
-		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomesDataFrameVersion(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
+		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomesPiecewise(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
 	recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
 	precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
 	falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
-	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve
-	fractionPeaksUnplaced = [c.fractionUnplaced() for c in confusionMatrices] 
-	
+	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve 
+	#graph ROC curve 
+	#add (0,0) and (1,0) points if they are not present?
+	print ("FPRS", falsePositiveRates)
+	print ("TPRS", truePositiveRates)
+	plt.plot(falsePositiveRates, truePositiveRates)
+	plt.title("ROC Curve")
+	plt.xlabel("FPR")
+	plt.ylabel("TPR")
+	plt.xlim(0,1.0)
+	plt.ylim(0,1.0)
+	plt.show()
+	#plot PR Curve
+	print ("recalls", recalls)
+	print ("precisions: ", precisions)
+	plt.plot(recalls, precisions)
+	plt.title("PR Curve")
+	plt.xlabel("Recall")
+	plt.ylabel("Precision")
+	plt.ylim(0,1.0)
+	plt.xlim(0,1.0)
+	plt.show()
 
-cutoffs = list(np.linspace(0,1.0,10))
-buildConfusionMatricesForGraphingDataFrameVersion(["Y"], "./datasets/", 1, 50, cutoffs, 50, 20, "testingChrYROC", "restingChrYPrecision", "TE")
+def extractMaximumValues(names):
+	maxVal = float('-inf')
+	for name in names:
+		predName = "chr" + name
+		forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
+		maxVal = max(maxVal, max(forward), max(reverse))
+	return maxVal
+		
+
+names = ["Y", "22", "21"]
+maxVal = extractMaximumValues(names)
+print ("Maximum threshold: ", maxVal)
+cutoffs = list(np.linspace(0,maxVal,10))
+buildConfusionMatricesForGraphingPiecewise(names, "./datasets/", 1, 50, cutoffs, 1, 20, "testingChrYROC", "restingChrYPrecision", "TE")
 
 
 
