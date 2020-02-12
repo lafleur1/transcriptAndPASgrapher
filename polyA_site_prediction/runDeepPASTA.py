@@ -13,6 +13,7 @@ import statistics
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet import IUPAC
+import matplotlib.pyplot as plt
 
 #take sequence -> break into fasta files format
 #get SS 
@@ -55,6 +56,7 @@ SeqIO.write(sequences, "example.fasta", "fasta")
 def makeFasta(sequence):
 	#make fasta from sequence slice
 	outputs = []
+	current_output = 0
 	for i in range(0,len(sequence) - (200-1)):
 		#for each 200 length kmer
 		#generate temporary fasta file
@@ -103,15 +105,19 @@ def makeFasta(sequence):
 		fout = open("fileOut.txt", "r")
 		lines = [float(x.strip().split('\t')[1]) for x in fout.readlines()]
 		outputs.append(lines[0])
+	print ("ALL OUTPUTS: ")
+	plt.plot(list(range(0,len(outputs))), outputs)
+	plt.savefig("testrangey.png")
 	print (outputs)
-	
+	print ("UNIQUE OUTPUTS: ")
+	print (set(outputs))
 	
 #try on 1000 nts of chrY
 chroName = "Y"
 totalName = "chr" + chroName + ".fasta"
 chroSeq = SeqIO.read(totalName, "fasta")
 
-sliceY = chroSeq.seq[100000:100000 + 500]
+sliceY = chroSeq.seq[110000:110000 + 1000]
 makeFasta(sliceY)
 
 
