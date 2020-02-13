@@ -1233,7 +1233,6 @@ distances = [1, 25, 50]
 tolerances = 0
 pasTypes = ['All', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU']
 cutoffs = openBestThresholds() #made using percentiles 1-100 of chr1 prediction values 
-cutoffs = [0.1]
 # local laptop locations
 chromsomeLocationsLocal ="../../aparentGenomeTesting/chromosomePredictions50/"
 fastaLocationLocal = "../../aparentGenomeTesting/fastas/"
