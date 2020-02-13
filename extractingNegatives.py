@@ -858,7 +858,7 @@ def buildConfusionMatricesForGraphing(names, stem, bufferVal, spacing, minhs, di
 def openBalancedValuesForTypeDataFrameVersion(toSeparate, pasType = ""):
 	#add another column of all 0's
 	toSeparate['peaksInRange'] = toSeparate.shape[0] * [0] #add row at the end of the dataframe with 0's to increment when a peak falls into it
-	if pasType != "":
+	if pasType != "All":
 		maskType = toSeparate["type"] == pasType
 		maskedTrue = toSeparate[maskType]
 		return maskedTrue
@@ -1075,35 +1075,38 @@ def piecewisePeakPlacement(predictionsForward, predictionsRC, balancedPos, balan
 					balancedNegs.loc[searchRightNegative, 'peaksInRange'] += 1
 	return balancedPos, balancedNegs
 			
-def buildConfidenceMatrixOneChroPiecewise(name, stem, b, s, minh, dist, tolerance, pasType = ""):
+def buildConfidenceMatrixOneChroPiecewise(predictionLocation, name, stem, b, s, minh, dist, tolerance, pasType = ""):
 	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
 	print ("Opening: ", fileName)
 	balancedPositives = openBalancedPositives(fileName)
 	balancedNegatives = openBalancedNegatives(fileName)
+	print ("BP Size: ", balancedPositives.shape)
+	print ("BN Size: ", balancedNegatives.shape)
 	#add peaksInRange column to count peaks in the cluster/empty clusters
 	balancedPosWithCounts = openBalancedValuesForTypeDataFrameVersion(balancedPositives, pasType) 
 	balancedNegsWithCounts = openBalancedValuesForTypeDataFrameVersion(balancedNegatives, pasType)
+	print ("BP Size: ", balancedPosWithCounts.shape)
+	print ("BN Size: ", balancedNegsWithCounts.shape)
 	#print (balancedPosWithCounts)
 	#open peaks for the forward and reverse strand predictions
 	predName = "chr" + name
-	forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
+	forward, reverse = openForwardReverse(predictionLocation, predName)
+	print ("Total predictions length: ", forward.size)
 	balancedPos, balancedNegs = piecewisePeakPlacement(forward, reverse, balancedPosWithCounts, balancedNegsWithCounts, tolerance, minh, dist)
 	countTP, countFP, countFN, countTN, dummy = fillConfMatrixDataFrameVersion( balancedPos, balancedNegs) #should still be able to score these the same way, adding default of totalPeaks = [] if not provided, will return -1 for the dummy var
 	return countTP, countFP, countFN, countTN
 	
 
 
-def buildConfidenceMatrixMultipleChromosomesPiecewise(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType = ""):
+def buildConfidenceMatrixMultipleChromosomesPiecewise(predictionLocation, names, stem, bufferVal, spacing, minh, dist, tolerance, pasType = ""):
 	countTPOverall = 0
 	countFPOverall = 0
 	countFNOverall = 0
 	countTNOverall = 0
-	#countUnplaced = 0
-	#totalPeaks = 0
 	for name in names:
 		print ("--------------------------------------------------")
 		print ("On chromosome: ", name)
-		countTP, countFP, countFN, countTN = buildConfidenceMatrixOneChroPiecewise(name, stem, bufferVal, spacing, minh, dist, tolerance, pasType)
+		countTP, countFP, countFN, countTN = buildConfidenceMatrixOneChroPiecewise(predictionLocation, name, stem, bufferVal, spacing, minh, dist, tolerance, pasType)
 		countTPOverall += countTP
 		countFPOverall += countFP
 		countFNOverall += countFN
@@ -1112,17 +1115,19 @@ def buildConfidenceMatrixMultipleChromosomesPiecewise(names, stem, bufferVal, sp
 		print ("--------------------------------------------------")
 	return peakConfusionMatrix(countTPOverall, countFPOverall, countFNOverall, countTNOverall)					
 
-def buildConfusionMatricesForGraphingPiecewise(names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
+
+	
+
+def buildConfusionMatricesForGraphingPiecewise(predictionLocation, names, stem, bufferVal, spacing, minhs, dist, tolerance, rocTitle, prTitle, pasType = ""):
 	confusionMatrices = []
 	for minh in minhs:
 		print ("ON: ", minh)
-		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomesPiecewise(names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
+		confusionMatrices.append(buildConfidenceMatrixMultipleChromosomesPiecewise(predictionLocation, names, stem, bufferVal, spacing, minh, dist, tolerance, pasType))
 	recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
 	precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
 	falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
 	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve 
 	#graph ROC curve 
-	#add (0,0) and (1,0) points if they are not present?
 	print ("FPRS", falsePositiveRates)
 	print ("TPRS", truePositiveRates)
 	plt.plot(falsePositiveRates, truePositiveRates)
@@ -1142,38 +1147,103 @@ def buildConfusionMatricesForGraphingPiecewise(names, stem, bufferVal, spacing, 
 	plt.ylim(0,1.0)
 	plt.xlim(0,1.0)
 	plt.show()
+	
 
-def extractMaximumValues(names):
+def extractMaximumValues(names, predictionLocation):
 	maxVal = float('-inf')
 	for name in names:
 		predName = "chr" + name
-		forward, reverse = openForwardReverse("../../aparentGenomeTesting/chromosomePredictions50/", predName)
+		forward, reverse = openForwardReverse(predictionLocation, predName)
 		maxVal = max(maxVal, max(forward), max(reverse))
 	return maxVal
-		
-
-names = ["Y", "22", "21"]
-maxVal = extractMaximumValues(names)
-print ("Maximum threshold: ", maxVal)
-cutoffs = list(np.linspace(0,maxVal,10))
-buildConfusionMatricesForGraphingPiecewise(names, "./datasets/", 1, 50, cutoffs, 1, 20, "testingChrYROC", "restingChrYPrecision", "TE")
 
 
+def openBestThresholds():
+	f_open = open("bestThresholds.txt", "r")
+	ts = [float(x.strip()) for x in f_open.readlines()]
+	return ts	
 
 
+def estimateThresholds(name, predictionLocation):
+	predName = "chr" + name
+	forward, reverse = openForwardReverse(predictionLocation, predName)
+	both = np.concatenate((forward, reverse))
+	print ("forward: ", forward.shape, " reverse complement: ", reverse.shape)
+	print ("combined: ", both.shape)
+	thresholds = []
+	for i in range(1,101):
+		#figuring out best thresholds to use overall
+		print ("ON %: ", i)
+		pfound = np.percentile(both, i)
+		thresholds.append(pfound)
+		print ("Threshold found: ", pfound)
+	print (thresholds)
+	f = open("bestThresholds.txt", "w")
+	for t in thresholds:
+		f.write(str(t) + '\n')
+	f.close()
+	print ("saved thresholds")
 	
 
+#making version to create confusion matrices for a single chromosome across mult. minhs
+#keeping bufferValue, spacing, tolerance fixed at 1, 50, 0 for now
+#varying spacings used in find_peaks, thresholds used in find_peaks, pasType being evalauted
+#saved output as csv files (becuase pandas dataframe to csv is easy)
+def singleChromosomeCMSpanning(cmLocation, predictionLocation, names, datasetsLocation, bufferValue, spacing, minhs, distances, tolerance, pasTypes):
+	for name in names:
+		columns_dict = {'name': [], 'pasType': [], 'bufferVal':[], 'spacing':[], 'minh':[], 'distance':[], 'tolerance':[], 'TruePositives':[], 'FalsePositives':[], 'FalseNegatives':[], 'TrueNegatives':[]}
+		for dist in distances: 
+			for minh in minhs:
+				for ptype in pasTypes:	
+					print ("h: ", minh, " distance: ", dist, "pasType: ", ptype)
+					countTP, countFP, countFN, countTN = buildConfidenceMatrixOneChroPiecewise(predictionLocation,
+						name,
+						datasetsLocation,
+						bufferValue,
+						spacing,
+						minh,
+						dist,
+						tolerance,
+						pasType = ptype)
+					#nameStorage = name + "_bufferVal_"+ str(bufferValue) + "_spacing_" + str(spacing) #used to specify which dataset is being used
+					columns_dict['name'].append(name)
+					columns_dict['pasType'].append(ptype)
+					columns_dict['bufferVal'].append(bufferValue)
+					columns_dict['spacing'].append(spacing)
+					columns_dict['minh'].append(minh)
+					columns_dict['distance'].append(dist)
+					columns_dict['tolerance'].append(tolerance)
+					columns_dict['TruePositives'].append(countTP)
+					columns_dict['FalsePositives'].append(countFP)
+					columns_dict['FalseNegatives'].append(countFN)
+					columns_dict['TrueNegatives'].append(countTN)
+					print ("True Positives: ", countTP, "False Positives: ", countFP, "False Negatives: ", countFN, "True Negatives: ", countTN)
+					print (" ")
+		toDF = pd.DataFrame(columns_dict)
+		#save csv for chromosome
+		saveName = cmLocation + name + "_ConfusionMatrices.csv"
+		toDF.to_csv(saveName)
+						
 
-	
 
-
-
-
-	
-		
-	
-	
-	
+names = ["22"]
+bufferVals = 1
+spacing = 50
+distances = [1, 25, 50]
+tolerances = 0
+pasTypes = ['All', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU']
+cutoffs = openBestThresholds() #made using percentiles 1-100 of chr1 prediction values 
+cutoffs = [0.1]
+# local laptop locations
+chromsomeLocationsLocal ="../../aparentGenomeTesting/chromosomePredictions50/"
+fastaLocationLocal = "../../aparentGenomeTesting/fastas/"
+cMLocation = "./ConfusionMatrices/"
+#for use on research servers
+fastaLocationBicycle =  "./fastas/" 
+predictionLocationBicycle = "./chromosomePredictions50/"
+datasetsLocation = "./datasets/"
+#buildConfusionMatricesForGraphingPiecewise(chromsomeLocationsLocal, names, "./datasets/", 1, 50, cutoffs, 1, 20, "testingChrYROC", "restingChrYPrecision", "TE")
+singleChromosomeCMSpanning(cMLocation, predictionLocationBicycle, names, datasetsLocation, bufferVals, spacing, cutoffs, distances, tolerances, pasTypes)
 		
 		
 	
