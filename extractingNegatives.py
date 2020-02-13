@@ -1239,8 +1239,8 @@ chromsomeLocationsLocal ="../../aparentGenomeTesting/chromosomePredictions50/"
 fastaLocationLocal = "../../aparentGenomeTesting/fastas/"
 cMLocation = "./ConfusionMatrices/"
 #for use on research servers
-fastaLocationBicycle =  "./fastas/" 
-predictionLocationBicycle = "./chromosomePredictions50/"
+fastaLocationBicycle =  "../fastas/" 
+predictionLocationBicycle = "../chromosomePredictions50/"
 datasetsLocation = "./datasets/"
 #buildConfusionMatricesForGraphingPiecewise(chromsomeLocationsLocal, names, "./datasets/", 1, 50, cutoffs, 1, 20, "testingChrYROC", "restingChrYPrecision", "TE")
 singleChromosomeCMSpanning(cMLocation, predictionLocationBicycle, names, datasetsLocation, bufferVals, spacing, cutoffs, distances, tolerances, pasTypes)
