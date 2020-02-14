@@ -1,0 +1,41 @@
+h:  0.0  distance:  1 pasType:  All
+Opening:  ./datasets/chro22_NegSpaces1_shifted50Nts
+BP Size:  (7988, 12)
+BN Size:  (7988, 8)
+BP Size:  (7988, 13)
+BN Size:  (7988, 9)
+../chromosomePredictions50/chr22.npy
+Traceback (most recent call last):
+  File "extractingNegatives.py", line 1246, in <module>
+    singleChromosomeCMSpanning(cMLocation, predictionLocationBicycle, names, datasetsLocation, bufferVals, spacing, cutoffs, distances, tolerances, pasTypes)
+  File "extractingNegatives.py", line 1207, in singleChromosomeCMSpanning
+    pasType = ptype)
+  File "extractingNegatives.py", line 1093, in buildConfidenceMatrixOneChroPiecewise
+    forward, reverse = openForwardReverse(predictionLocation, predName)
+  File "extractingNegatives.py", line 265, in openForwardReverse
+    forward = np.load(totalNameFor)
+  File "/home/lafleur1/anaconda3/envs/apa/lib/python3.7/site-packages/numpy/lib/npyio.py", line 428, in load
+    fid = open(os_fspath(file), "rb")
+FileNotFoundError: [Errno 2] No such file or directory: '../chromosomePredictions50/chr22.npy'
+h:  0.0  distance:  1 pasType:  All
+Opening:  ./datasets/chro22_NegSpaces1_shifted50Nts
+BP Size:  (7988, 12)
+BN Size:  (7988, 8)
+BP Size:  (7988, 13)
+BN Size:  (7988, 9)
+../../aparentGenomeTesting/chromosomePredictions50/chr22.npy
+Total predictions length:  50818468
+Traceback (most recent call last):
+  File "extractingNegatives.py", line 1246, in <module>
+    singleChromosomeCMSpanning(cMLocation, chromsomeLocationsLocal, names, datasetsLocation, bufferVals, spacing, cutoffs, distances, tolerances, pasTypes)
+  File "extractingNegatives.py", line 1207, in singleChromosomeCMSpanning
+    pasType = ptype)
+  File "extractingNegatives.py", line 1095, in buildConfidenceMatrixOneChroPiecewise
+    balancedPos, balancedNegs = piecewisePeakPlacement(forward, reverse, balancedPosWithCounts, balancedNegsWithCounts, tolerance, minh, dist)
+  File "extractingNegatives.py", line 1032, in piecewisePeakPlacement
+    and (peak <= balancedNegs.end[searchRightNegative].values[0] + tolerance) for peak in peaksInSliceCorrected]
+  File "extractingNegatives.py", line 1032, in <listcomp>
+    and (peak <= balancedNegs.end[searchRightNegative].values[0] + tolerance) for peak in peaksInSliceCorrected]
+  File "/home/lafleur1/anaconda3/envs/apa/lib/python3.7/site-packages/pandas/core/generic.py", line 5257, in __getattr__
+    def __getattr__(self, name: str):
+KeyboardInterrupt
