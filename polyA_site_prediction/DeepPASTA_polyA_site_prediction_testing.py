@@ -4,6 +4,11 @@ import sys
 import numpy as np
 import math
 import random
+import os
+
+
+stderr = sys.stderr
+sys.stderr = open(os.devnull, 'w')
 
 from keras.preprocessing import sequence
 from keras.models import Model
@@ -15,7 +20,15 @@ from keras.layers.recurrent import LSTM
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.layers.advanced_activations import PReLU
 from sklearn.metrics import average_precision_score, roc_auc_score
+sys.stderr = stderr
 
+
+
+#shutting up tensorflow warnings 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
+import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 np.random.seed(1337)
 random.seed(1337)
@@ -74,7 +87,7 @@ def oneHotEncodingForSS(rawStructureList):
 		return 0
 
 def matchingLabelBetweenSeqAndStructure(seqLabelList, structureLabelList, kindOfData):
-	print>>sys.stderr, 'Checking label similarity between sequence and structure of ' + kindOfData + ' data'
+	#print>>sys.stderr, 'Checking label similarity between sequence and structure of ' + kindOfData + ' data'
 	for index in range(len(seqLabelList)):
 		if seqLabelList[index] != structureLabelList[index]:
 			print>>sys.stderr, 'ERROR: label mismatch between sequence and structure'
@@ -121,22 +134,22 @@ typeOfOperation = 'DEFAULT'
 outputFile = ''
 structureSeqLength = 200
 
-print>>sys.stderr, "Starting program ..."
+#print>>sys.stderr, "Starting program ..."
 if len(sys.argv) < 2:
-	print(pydoc.render_doc(sys.modules[__name__]));
+	#print(pydoc.render_doc(sys.modules[__name__]));
 	sys.exit();
 
 for i in range(len(sys.argv)):
 	if i < len(sys.argv)-1:
 		if sys.argv[i] == '-testSeq' or sys.argv[i] == '--testingSeqFASTAFile':
 			testingSeqFile = sys.argv[i+1]
-			print>>sys.stderr, ("Genome sequence file (testing): " + testingSeqFile)
+			#print>>sys.stderr, ("Genome sequence file (testing): " + testingSeqFile)
 		if sys.argv[i] == '-testSS' or sys.argv[i] == '--testingStructureFile':
 			testingStructureFile = sys.argv[i+1]
-			print>>sys.stderr, ("Secondary structure file for testing (related to sequence file): " + testingStructureFile)
+			#print>>sys.stderr, ("Secondary structure file for testing (related to sequence file): " + testingStructureFile)
 		if sys.argv[i] == '-o' or sys.argv[i] == '--outputFile':
 			outputFile = sys.argv[i+1]
-			print>>sys.stderr, ("Predicted result output file name: " + outputFile)
+			#print>>sys.stderr, ("Predicted result output file name: " + outputFile)
 
 if outputFile != '':
 	typeOfOperation = 'PRINT'
@@ -183,7 +196,7 @@ testingTitleList = []
 if testingSeqFile != '':
 	for line in open(testingSeqFile):
 		info = line[0:(len(line)-1)]
-		print ("INFO: ", info)
+		#print ("INFO: ", info)
 		if '>' in info:
 			if typeOfOperation == 'DEFAULT':
 				testingLabelList.append(int(info[-1:]))
@@ -233,7 +246,7 @@ testingData.append(encodedTestingStructure2)
 testingData.append(encodedTestingStructure3)
 
 testresult1 = model.predict(testingData, batch_size = 2042, verbose = 0)
-print ("*****TEST RESULT: ", testresult1)
+
 
 if typeOfOperation == 'DEFAULT':
 	print 'AUC: ' + str(roc_auc_score(testingLabelList, testresult1))

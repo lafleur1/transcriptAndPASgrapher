@@ -9,7 +9,7 @@ import os;
 argvi = 1
 inputFile = ""
 outputFile = ""
-print>>sys.stderr, "Starting program ..."
+#print>>sys.stderr, "Starting program ..."
 if len(sys.argv) < 2:
 	print(pydoc.render_doc(sys.modules[__name__]));
 	sys.exit();
@@ -18,12 +18,13 @@ for i in range(len(sys.argv)):
 	if i < len(sys.argv)-1:
 		if sys.argv[i]=='-i' or sys.argv[i]=='--inputfile':
 			inputFile = sys.argv[i+1]
-			print>>sys.stderr, ("Output from RNAshapes: " + inputFile)
+			#print>>sys.stderr, ("Output from RNAshapes: " + inputFile)
 		if sys.argv[i] == '-o' or sys.argv[i] == '--outputfilename':
 			outputFile = sys.argv[i+1]
-			print>>sys.stderr, ("Output filename: " + outputFile)
+			#print>>sys.stderr, ("Output filename: " + outputFile)
 
 
+#processes RNAShapes output
 
 firstSubStructure = []
 secondSubStructure = []
@@ -31,8 +32,9 @@ outputList = []
 current = 'none'
 if inputFile != "":
 	for line in open(inputFile):
-		if ">" in line:
-			if current == 'second':
+		print>>sys.stderr, (line)
+		if ">" in line: #first line in file (fasta name)
+			if current == 'second': #enters if there is another fasta 
 				for first in firstSubStructure:
 					for second in secondSubStructure:
 						outputList.append(first+second)
@@ -42,7 +44,7 @@ if inputFile != "":
 			secondSubStructure = []
 		elif ('101' in line) and ('200' in line):
 			current = 'second'
-		elif ('1' in line) and ('100' in line):
+		elif ('1' in line) and ('100' in line): #second line in file
 			current = 'first'
 		elif ("(" in line or ")" in line or "." in line):
 			if current == 'first':

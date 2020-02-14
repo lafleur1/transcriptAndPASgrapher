@@ -128,22 +128,22 @@ argvi = 1
 inputFile = ""
 outputFile = ""
 NUMBER_OF_STRUCTURE = 3
-print>>sys.stderr, "Starting program ..."
+#print>>sys.stderr, "Starting program ..."
 if len(sys.argv) < 2:
-	print(pydoc.render_doc(sys.modules[__name__]));
+	#print(pydoc.render_doc(sys.modules[__name__]));
 	sys.exit();
 
 for i in range(len(sys.argv)):
 	if i < len(sys.argv)-1:
 		if sys.argv[i]=='-i' or sys.argv[i]=='--inputfile':
 			inputFile = sys.argv[i+1]
-			print>>sys.stderr, ("Output from RNAshapes to assign structure: " + inputFile)
+			#print>>sys.stderr, ("Output from RNAshapes to assign structure: " + inputFile)
 		if sys.argv[i] == '-o' or sys.argv[i] == '--outputfile':
 			outputFile = sys.argv[i+1]
-			print>>sys.stderr, ("Output file name: " + outputFile)
+			#print>>sys.stderr, ("Output file name: " + outputFile)
 		if sys.argv[i] == '-c' or sys.argv[i] == '--structurecount':
 			NUMBER_OF_STRUCTURE = int(sys.argv[i+1])
-			print>>sys.stderr, ("Number of structure: " + str(NUMBER_OF_STRUCTURE))
+			#print>>sys.stderr, ("Number of structure: " + str(NUMBER_OF_STRUCTURE))
 
 
 count = 0
