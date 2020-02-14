@@ -16,6 +16,7 @@ import random
 import time
 import math
 from scipy.signal import find_peaks
+import sys
 
 #Note: Ensembl is 1-based, polyAsite is 0-based
 
@@ -1225,15 +1226,60 @@ def singleChromosomeCMSpanning(cmLocation, predictionLocation, names, datasetsLo
 		toDF.to_csv(saveName)
 						
 
+#appends pre-made rows to existing rows
+def singleChromosomeCMSpanningContinuousSaving(cmLocation, predictionLocation, names, datasetsLocation, bufferValue, spacing, minhs, distances, tolerance, pasTypes):
+	for name in names:
+		columns_dict = {'name': [], 'pasType': [], 'bufferVal':[], 'spacing':[], 'minh':[], 'distance':[], 'tolerance':[], 'TruePositives':[], 'FalsePositives':[], 'FalseNegatives':[], 'TrueNegatives':[]}
+		for dist in distances: 
+			for minh in minhs:
+				for ptype in pasTypes:	
+					print ("h: ", minh, " distance: ", dist, "pasType: ", ptype)
+					countTP, countFP, countFN, countTN = buildConfidenceMatrixOneChroPiecewise(predictionLocation,
+						name,
+						datasetsLocation,
+						bufferValue,
+						spacing,
+						minh,
+						dist,
+						tolerance,
+						pasType = ptype)
+					#nameStorage = name + "_bufferVal_"+ str(bufferValue) + "_spacing_" + str(spacing) #used to specify which dataset is being used
+					columns_dict['name'].append(name)
+					columns_dict['pasType'].append(ptype)
+					columns_dict['bufferVal'].append(bufferValue)
+					columns_dict['spacing'].append(spacing)
+					columns_dict['minh'].append(minh)
+					columns_dict['distance'].append(dist)
+					columns_dict['tolerance'].append(tolerance)
+					columns_dict['TruePositives'].append(countTP)
+					columns_dict['FalsePositives'].append(countFP)
+					columns_dict['FalseNegatives'].append(countFN)
+					columns_dict['TrueNegatives'].append(countTN)
+					print ("True Positives: ", countTP, "False Positives: ", countFP, "False Negatives: ", countFN, "True Negatives: ", countTN)
+					print (" ")
+		toDF = pd.DataFrame(columns_dict)
+		#save csv for chromosome
+		saveName = cmLocation + name + "_ConfusionMatrices.csv"
+		toDF.to_csv(saveName)
 
-names = ["22"]
+
+names = []
+if len(sys.argv) != 1:
+	for arg in sys.argv[1:]:
+		names.append(arg)
+else:
+	names = ["22"]
+		
+
+
 bufferVals = 1
 spacing = 50
 distances = [1, 25, 50]
 tolerances = 0
-pasTypes = ['All', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU']
+#pasTypes = ['All', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU']
+pasTypes = ['TE', 'IN']
 cutoffs = openBestThresholds() #made using percentiles 1-100 of chr1 prediction values 
-cutoffs = [0.1,0.2]
+#cutoffs = [0.1,0.2]
 # local laptop locations
 chromsomeLocationsLocal ="../../aparentGenomeTesting/chromosomePredictions50/"
 fastaLocationLocal = "../../aparentGenomeTesting/fastas/"
