@@ -34,18 +34,20 @@ if inputFile != "":
 	for line in open(inputFile):
 		print>>sys.stderr, (line)
 		if ">" in line: #first line in file (fasta name)
-			if current == 'second': #enters if there is another fasta 
+			###
+			if current == 'second': #enters if there is another fasta, not important for me
 				for first in firstSubStructure:
 					for second in secondSubStructure:
 						outputList.append(first+second)
 				current = 'none'
+			###
 			outputList.append(line)
 			firstSubStructure = []
 			secondSubStructure = []
-		elif ('101' in line) and ('200' in line):
+		elif ('101' in line) and ('200' in line): 
 			current = 'second'
 		elif ('1' in line) and ('100' in line): #second line in file
-			current = 'first'
+			current = 'first' #set that it is in 1-100 area
 		elif ("(" in line or ")" in line or "." in line):
 			if current == 'first':
 				firstSubStructure.append(line[:-1])
