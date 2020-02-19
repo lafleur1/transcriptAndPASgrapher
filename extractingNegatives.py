@@ -1327,11 +1327,11 @@ print ("NEW TRESHOLDS: ")
 print ('previous smallest: ', cutoffs[0])
 newValues = np.linspace(0, cutoffs[0], 5)
 #making new rows for five lower values
-addingRowsToCM(cmLocation, predictionLocationBicycle, names, datasetsLocation, bufferVals, spacing, newValues, distances, tolerances, pasTypes)
+addingRowsToCM(cMLocation, predictionLocationBicycle, names, datasetsLocation, bufferVals, spacing, newValues, distances, tolerances, pasTypes)
 
 print ("NEW LARGE THRESHOLDS: ")
 newValues = [x/10.0 for x in range(1,11)]
 #making new rows for larger values
-addingRowsToCM(cmLocation, predictionLocationBicycle, names, datasetsLocation, bufferVals, spacing, newValues, distances, tolerances, pasTypes)
+addingRowsToCM(cMLocation, predictionLocationBicycle, names, datasetsLocation, bufferVals, spacing, newValues, distances, tolerances, pasTypes)
 
 
