@@ -13,6 +13,7 @@ import time
 import math
 from scipy.signal import find_peaks
 import sys
+from mpl_toolkits.mplot3d import Axes3D
 
 
 #confusion matrix class to use when calculating the ROC and PR curves for APARNET
@@ -79,7 +80,7 @@ def openCMDataOneChromosome(location, name):
 	return pd.read_csv( total_name)
 	
 	
-def makeROCForOneChromosome(location, name, pasType = "TE", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0):
+def makeCMSForOneChromosome(location, name, pasType = "TE", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0):
 	#for the given values, generates the ROC and PR curves
 	chromosomeCMValues = openCMDataOneChromosome(location, name)
 	#make Confusion Matrices using peakConfusionMatrix from extractingNegatives.py
@@ -88,35 +89,42 @@ def makeROCForOneChromosome(location, name, pasType = "TE", bufferVal = 1, spaci
 		if row['pasType'] == pasType and row['bufferVal'] == bufferVal and row['spacing'] == spacing and row['distance'] == distance and row['tolerance'] == tolerance:
 			#def __init__(self, countTP, countFP, countFN, countTN , unplacedPredictions = 0, totalPredictions = 0):
 			confusionMatrices.append(peakConfusionMatrix(row['TruePositives'], row['FalsePositives'], row['FalseNegatives'], row['TrueNegatives'], row['minh']))
-			print (row)
-	print ("number CMs selected: ", len(confusionMatrices))
-	recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
-	precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
-	falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
-	truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve
-	thresholds = [c.threshold for c in confusionMatrices]
-	#graph ROC curve 
-	#add (0,0) and (1,0) points if they are not present?
-	#print ("FPRS", falsePositiveRates)
-	#print ("TPRS", truePositiveRates)
-	plt.plot(falsePositiveRates, truePositiveRates, 'o--')
+	#print ("number CMs selected: ", len(confusionMatrices))
+	return confusionMatrices
+	
+def graphAllChrROC(location, names, pasType = "TE", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0):
+	#plotting all ROC curves on same curve
+	for name in names: 
+		confusionMatrices = makeCMSForOneChromosome(location, name, pasType, bufferVal, spacing, distance, tolerance)
+		#recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
+		##precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
+		falsePositiveRates = [c.falsePositiveRate() for c in confusionMatrices] #x axis ROC curve
+		truePositiveRates = [c.truePositiveRate() for c in confusionMatrices] #y axis ROC Curve
+		plt.plot(falsePositiveRates, truePositiveRates, 'o--')	
+	#plt.plot(falsePositiveRates, truePositiveRates, 'o--')
+	plt.plot([0,1.0],[0,1.0], '--')
 	plt.title("ROC Curve")
 	plt.xlabel("FPR")
 	plt.ylabel("TPR")
 	plt.xlim(0,1.0)
 	plt.ylim(0,1.0)
-	print (thresholds)
+	#print (thresholds)
 	plt.show()
+	
+def graphAllChrPR(location, names, pasType = "TE", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0):
+	#plotting all ROC curves on same curve
+	for name in names: 
+		confusionMatrices = makeCMSForOneChromosome(location, name, pasType, bufferVal, spacing, distance, tolerance)
+		recalls = [c.recall() for c in confusionMatrices] #x axis on Precision Recall Curve
+		precisions = [c.precision() for c in confusionMatrices] #y axis on Precision Recall Curve
+		plt.plot(recalls, precisions, 'o--')
 	#plot PR Curve
-	plt.plot(recalls, precisions, 'o--')
+	plt.plot([0,1.0],[1.0,0], '--')
 	plt.title("PR Curve")
 	plt.xlabel("Recall")
 	plt.ylabel("Precision")
 	plt.ylim(0,1.0)
 	plt.xlim(0,1.0)
-	print (thresholds)
-	print ("recalls", recalls)
-	print ("precisions: ", precisions)
 	plt.show()
 	
 
@@ -129,14 +137,12 @@ def generateGraphs(names, location, pasType = "TE", bufferVal = 1, spacing = 50,
 			if row['pasType'] == pasType and row['bufferVal'] == bufferVal and row['spacing'] == spacing and row['distance'] == distance and row['tolerance'] == tolerance:
 				if row['minh'] not in cmVals:
 					cmVals[row['minh']] = [row['TruePositives'], row['FalsePositives'], row['FalseNegatives'], row['TrueNegatives']]
-					#print (cmVals)
 				else:
 					#update values 
-					#print (cmVals[row['minh']])
 					cmVals[row['minh']][0] += row['TruePositives']
 					cmVals[row['minh']][1] += row['FalsePositives']
 					cmVals[row['minh']][2] += row['FalseNegatives']
-					cmVals[row['minh']][2] += row['TrueNegatives']
+					cmVals[row['minh']][3] += row['TrueNegatives']
 	#now change all threshold values into confusion matrices
 	confusionMatrices = []
 	for key in cmVals:
@@ -152,6 +158,7 @@ def generateGraphs(names, location, pasType = "TE", bufferVal = 1, spacing = 50,
 	#print ("FPRS", falsePositiveRates)
 	#print ("TPRS", truePositiveRates)
 	plt.plot(falsePositiveRates, truePositiveRates, 'o--')
+	plt.plot([0,1.0],[0,1.0], '--')
 	plt.title("ROC Curve")
 	plt.xlabel("FPR")
 	plt.ylabel("TPR")
@@ -161,6 +168,7 @@ def generateGraphs(names, location, pasType = "TE", bufferVal = 1, spacing = 50,
 	plt.show()
 	#plot PR Curve
 	plt.plot(recalls, precisions, 'o--')
+	plt.plot([0,1.0],[1.0,0], '--')
 	plt.title("PR Curve")
 	plt.xlabel("Recall")
 	plt.ylabel("Precision")
@@ -169,6 +177,14 @@ def generateGraphs(names, location, pasType = "TE", bufferVal = 1, spacing = 50,
 	#print (thresholds)
 	#print ("recalls", recalls)
 	#print ("precisions: ", precisions)
+	plt.show()
+	#making 3d plot with thresholds/ROC values and 3d plot with thresholds/PR values
+	fig = plt.figure()
+	ax = fig.add_subplot(111, projection='3d')
+	ax.scatter(falsePositiveRates, truePositiveRates, thresholds)
+	ax.set_xlabel('FPR')
+	ax.set_ylabel('TPR')
+	ax.set_zlabel('Thresholds')
 	plt.show()
 					
 
@@ -191,7 +207,10 @@ def condenseCSV(names, location):
 
 location = "./ConfusionMatrices/"
 name = "11"
-#cms = openCMDataOneChromosome(location, name)
-makeROCForOneChromosome(location, name, pasType = "TE", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
-names = ["Y","3","4","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22"]
-generateGraphs(names, location, pasType = "TE", bufferVal = 1, spacing = 50, distance = 25, tolerance = 0)
+names = ["Y","2", "3","4", "5", "6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22"]
+#generateGraphs(names, location, pasType = "TE", bufferVal = 1, spacing = 50, distance = 25, tolerance = 0)
+#graphAllChrROC(location, names, pasType = "TE", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
+#graphAllChrPR(location, names, pasType = "TE", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
+#graphAllChrROC(location, names, pasType = "IN", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
+#graphAllChrPR(location, names, pasType = "IN", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
+generateGraphs(names, location, pasType = "IN", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
