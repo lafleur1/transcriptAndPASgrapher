@@ -1321,15 +1321,17 @@ datasetsLocation = "./datasets/"
 #singleChromosomeCMSpanning(cMLocation, chromsomeLocationsLocal, names, datasetsLocation, bufferVals, spacing, cutoffs, distances, tolerances, pasTypes)
 		
 
-minhs = [0.1,0.2]
-cmLocation = "./"
 #addingRowsToCM(cmLocation, chromsomeLocationsLocal, names, datasetsLocation, bufferVals, spacing, minhs, distances, tolerances, pasTypes)
 
 print ("NEW TRESHOLDS: ")
 print ('previous smallest: ', cutoffs[0])
-print (np.linspace(0, cutoffs[0], 5))
+newValues = np.linspace(0, cutoffs[0], 5)
+#making new rows for five lower values
+addingRowsToCM(cmLocation, predictionLocationBicycle, names, datasetsLocation, bufferVals, spacing, newValues, distances, tolerances, pasTypes)
 
 print ("NEW LARGE THRESHOLDS: ")
-print ([x/10.0 for x in range(1,11)])
+newValues = [x/10.0 for x in range(1,11)]
+#making new rows for larger values
+addingRowsToCM(cmLocation, predictionLocationBicycle, names, datasetsLocation, bufferVals, spacing, newValues, distances, tolerances, pasTypes)
 
 
