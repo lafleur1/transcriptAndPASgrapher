@@ -11,3 +11,6 @@ for arg in sys.argv[1:]:
 	others.append(arg)
 
 print (others)
+
+
+

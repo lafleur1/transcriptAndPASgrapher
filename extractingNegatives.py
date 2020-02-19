@@ -328,7 +328,7 @@ def makeNegativeDatasetsForOneChromosome(chroName):
 #################
 def openAllNegatives(name):
 	negName = name + "AllNegatives.csv"
-	return pd.read_csv( negativesName,  dtype = {"seqName": str}) 
+	return pd.read_csv( negName,  dtype = {"seqName": str}) 
 
 def openBalancedNegatives(name):
 	negativesName = name + "BalancedNegatives.csv"
@@ -1289,7 +1289,7 @@ fastaLocationBicycle =  "../fastas/"
 predictionLocationBicycle = "../chromosomePredictions50/"
 datasetsLocation = "./datasets/"
 #buildConfusionMatricesForGraphingPiecewise(chromsomeLocationsLocal, names, "./datasets/", 1, 50, cutoffs, 1, 20, "testingChrYROC", "restingChrYPrecision", "TE")
-singleChromosomeCMSpanning(cMLocation, predictionLocationBicycle, names, datasetsLocation, bufferVals, spacing, cutoffs, distances, tolerances, pasTypes)
+singleChromosomeCMSpanning(cMLocation, chromsomeLocationsLocal, names, datasetsLocation, bufferVals, spacing, cutoffs, distances, tolerances, pasTypes)
 		
 		
 	

@@ -32,7 +32,8 @@ for i in range(len(sys.argv)):
 count = 0
 outputList = []
 if inputFile != "":
-	for line in open(inputFile):
+	for line in open(inputFile):	
+		print (line)
 		if ">" in line:
 			outputList.append(line)
 			count = 0
