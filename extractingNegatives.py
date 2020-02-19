@@ -17,6 +17,7 @@ import time
 import math
 from scipy.signal import find_peaks
 import sys
+from csv import writer
 
 #Note: Ensembl is 1-based, polyAsite is 0-based
 
@@ -1262,6 +1263,34 @@ def singleChromosomeCMSpanningContinuousSaving(cmLocation, predictionLocation, n
 		saveName = cmLocation + name + "_ConfusionMatrices.csv"
 		toDF.to_csv(saveName)
 
+def addingRowsToCM(cmLocation, predictionLocation, names, datasetsLocation, bufferValue, spacing, minhs, distances, tolerance, pasTypes):
+	for name in names:
+		for dist in distances: 
+			for minh in minhs:
+				for ptype in pasTypes:	
+					print ("h: ", minh, " distance: ", dist, "pasType: ", ptype)
+					countTP, countFP, countFN, countTN = buildConfidenceMatrixOneChroPiecewise(predictionLocation,
+						name,
+						datasetsLocation,
+						bufferValue,
+						spacing,
+						minh,
+						dist,
+						tolerance,
+						pasType = ptype)
+					#append row to existing CSV now 
+					#row order is: 
+					#[name, pasType, bufferVal, spacing, minh, distane, toelrance, TP, FP, FN, FN]
+					print ("NEW ROW: ")
+					newRow = [" ", name, ptype, bufferValue, spacing, minh, dist, tolerance, countTP, countFP, countFN, countTN]
+					print (newRow)
+					saveName = cmLocation + name + "_ConfusionMatrices.csv"
+					with open(saveName, 'a+', newline = '') as cf:
+						csv_writer = writer(cf)
+						csv_writer.writerow(newRow)
+					print ("True Positives: ", countTP, "False Positives: ", countFP, "False Negatives: ", countFN, "True Negatives: ", countTN)
+					print (" ")
+
 
 names = []
 if len(sys.argv) != 1:
@@ -1289,10 +1318,18 @@ fastaLocationBicycle =  "../fastas/"
 predictionLocationBicycle = "../chromosomePredictions50/"
 datasetsLocation = "./datasets/"
 #buildConfusionMatricesForGraphingPiecewise(chromsomeLocationsLocal, names, "./datasets/", 1, 50, cutoffs, 1, 20, "testingChrYROC", "restingChrYPrecision", "TE")
-singleChromosomeCMSpanning(cMLocation, chromsomeLocationsLocal, names, datasetsLocation, bufferVals, spacing, cutoffs, distances, tolerances, pasTypes)
+#singleChromosomeCMSpanning(cMLocation, chromsomeLocationsLocal, names, datasetsLocation, bufferVals, spacing, cutoffs, distances, tolerances, pasTypes)
 		
-		
-	
-	
+
+minhs = [0.1,0.2]
+cmLocation = "./"
+#addingRowsToCM(cmLocation, chromsomeLocationsLocal, names, datasetsLocation, bufferVals, spacing, minhs, distances, tolerances, pasTypes)
+
+print ("NEW TRESHOLDS: ")
+print ('previous smallest: ', cutoffs[0])
+print (np.linspace(0, cutoffs[0], 5))
+
+print ("NEW LARGE THRESHOLDS: ")
+print ([x/10.0 for x in range(1,11)])
 
 

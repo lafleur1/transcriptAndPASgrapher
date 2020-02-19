@@ -185,7 +185,11 @@ def generateGraphs(names, location, pasType = "TE", bufferVal = 1, spacing = 50,
 	ax.set_xlabel('FPR')
 	ax.set_ylabel('TPR')
 	ax.set_zlabel('Thresholds')
+	ax.set_xlim3d(0,1.0)
+	ax.set_ylim3d(0,1.0)
+	ax.set_zlim3d(0,1.0)
 	plt.show()
+	print (thresholds)
 					
 
 	
@@ -213,4 +217,4 @@ names = ["Y","2", "3","4", "5", "6","7","8","9","10","11","12","13", "14", "15",
 #graphAllChrPR(location, names, pasType = "TE", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
 #graphAllChrROC(location, names, pasType = "IN", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
 #graphAllChrPR(location, names, pasType = "IN", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
-generateGraphs(names, location, pasType = "IN", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
+generateGraphs(names, location, pasType = "TE", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
