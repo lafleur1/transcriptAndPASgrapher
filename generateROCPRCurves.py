@@ -186,11 +186,12 @@ def condenseCSV(names, location):
 			else: #it is in the combine dataframe and should be updated
 				print ("is in the dataframe")
 				
-		
+
+
 
 location = "./ConfusionMatrices/"
 name = "11"
 #cms = openCMDataOneChromosome(location, name)
-#makeROCForOneChromosome(location, name, pasType = "TE", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
+makeROCForOneChromosome(location, name, pasType = "TE", bufferVal = 1, spacing = 50, distance = 1, tolerance = 0)
 names = ["Y","3","4","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22"]
-generateGraphs(names, location, pasType = "TE", bufferVal = 1, spacing = 50, distance = 50, tolerance = 0)
+generateGraphs(names, location, pasType = "TE", bufferVal = 1, spacing = 50, distance = 25, tolerance = 0)
