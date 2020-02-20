@@ -86,11 +86,7 @@ def oneHotEncodingForSS(rawStructureList):
 	else:
 		return 0
 
-def matchingLabelBetweenSeqAndStructure(seqLabelList, structureLabelList, kindOfData):
-	#print>>sys.stderr, 'Checking label similarity between sequence and structure of ' + kindOfData + ' data'
-	for index in range(len(seqLabelList)):
-		if seqLabelList[index] != structureLabelList[index]:
-			print>>sys.stderr, 'ERROR: label mismatch between sequence and structure'
+
 
 def sequenceModel(seqInput):
 	seqCov = Conv1D(filters=512,
@@ -233,8 +229,6 @@ else:
 	print>>sys.stderr, 'ERROR: validation file is not given'
 
 encodedTestingSeq = oneHotEncodingForSeq(testingSequenceList)
-#print ("STRUCTURE LIST 1: ")
-#print (testingStructureList1)
 encodedTestingStructure1 = oneHotEncodingForSS(testingStructureList1)
 encodedTestingStructure2 = oneHotEncodingForSS(testingStructureList2)
 encodedTestingStructure3 = oneHotEncodingForSS(testingStructureList3)
