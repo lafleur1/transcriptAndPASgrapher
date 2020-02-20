@@ -19,6 +19,7 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 import tensorflow as tf
 tf.get_logger().setLevel('INFO')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
+os.environ["KMP_WARNINGS"] = "FALSE"
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
 import tensorflow as tf
@@ -362,14 +363,15 @@ def runPASTA(sequence):
 		out = runModel(strSeq,"rnaShapesOutput.txt", loadedModel)
 		outputs.append(out[0][0])
 	return outputs
+	
+
 
 chroName = "Y"
 fastaLocs = ""
 totalName = fastaLocs + "chr" + chroName + ".fasta"
 chroSeq = SeqIO.read(totalName, "fasta")
 sliceY = chroSeq.seq[500000:500000 + 1199]
-print ("TOTAL SEQ: ", len(chroSeq.seq))
-print (len(sliceY))
+
 start_time = time.time()
 print ("START TIME: ")
 outVals = runPASTA(sliceY)
@@ -378,6 +380,7 @@ print ("number outputs: ", len(outVals))
 print ("sequence length: ", len(sliceY))
 print ("ALL OUTPUTS: ")
 print (outVals)
+
 
 
 
