@@ -5,6 +5,8 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet import generic_dna
 from Bio.Alphabet import IUPAC
+import sklearn.metrics as metrics
+import pandas as pd
 
 from keras.preprocessing import sequence
 from keras.models import Model
@@ -20,8 +22,7 @@ import tensorflow as tf
 tf.get_logger().setLevel('INFO')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 os.environ["KMP_WARNINGS"] = "FALSE"
-stderr = sys.stderr
-sys.stderr = open(os.devnull, 'w')
+
 import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 #functions from DeepPASTA shape_asign_per_nucleotide.py 
@@ -269,6 +270,9 @@ def processRNAShapesOutput(inputFile):
 				outputList.append(first+second)
 		current = 'none'
 	passedOn = outputList[0:4]
+	if len(passedOn) != 4:
+		print (passedOn)
+		print (outputList)
 	count = 0
 	outputList3 = []
 	lastShape = ''
@@ -330,6 +334,9 @@ def compileModel():
 #output of model score 
 def runModel(sequence,inputFile, model ):
 	outSS = processRNAShapesOutput(inputFile) #list of three 
+	if len(outSS) != 4:
+		print ("ERROR!")
+		print (outSS)
 	encodedTestingSeq = oneHotEncodingForSeq([sequence])
 	encodedTestingStructure1 = oneHotEncodingForSS([outSS[1]])
 	encodedTestingStructure2 = oneHotEncodingForSS([outSS[2]])
@@ -345,11 +352,48 @@ def runModel(sequence,inputFile, model ):
 
 
 
-def runPASTA(sequence):
+'''
+#predicting and storing DeepPASTA for each Postiive/False Cluster 
+def piecewisePeakPlacement(forwardStrand, reverseCompStrand, balancedDataset):
+	#using scipy find peaks on a slice around the balanced pos/neg regions to speed up process, since find_peaks only works on nearby values
+	#newID = row['clusterID'] + "_LeftNegative"
+	#newID = row['clusterID'] + "_RightNegative"
+	lenStrand = len(forwardStrand)
+	for index, row in balancedDataset.iterrows():
+		#for each row, slice the prediction numpy around it (1000 nts)
+		if row['strand'] == "+":
+			if row['start'] - 500 < 0:
+				start = 0 
+			else:
+				start = row['start'] - 500
+			if row['end'] + 500 > lenStrand -1:
+				end = lenStrand-1
+			else:
+				end = row['end'] + 500
+			predictionString = prepTargetAreaForPrediction(start, end, forwardStrand)
+			
+			
+			
+		else:
+			#correct indexes
+			rcIndexEnd = (lenStrand -1) - row['start']
+			if rcIndexEnd + 500 > lenStrand - 1:
+				end = lenStrand -1
+			else:
+				end = rcIndexEnd + 500
+			rcIndexStart = (lenStrand -1) - row['end']
+			#print ("row ens: ", row['end'], " corr start: ", rcIndexStart)
+			if rcIndexStart - 500 < 0 :
+				start = 0
+			else:
+				start = rcIndexStart - 500
+			rcSlice = reverseCompStrand[start:end]
+'''	
+
+def runPASTA(sequence, loadedModel):
 	#make fasta from sequence slice
 	outputs = []
 	current_output = 0
-	loadedModel = compileModel()
 	for i in range(0,len(sequence) - (200-1)):
 		strSeq = str(sequence[i:i+200])
 		dname = "1"
@@ -364,25 +408,167 @@ def runPASTA(sequence):
 		outputs.append(out[0][0])
 	return outputs
 	
+def prepTargetAreaForPrediction(targetStart, targetEnd, chrS):
+	return str(chrS[targetStart-99:targetEnd + 101])
+
+def getTargetNucleotides(strPredictedOn):
+	return strPredictedOn[99:len(strPredictedOn)-99-1]
+
+	
+def openAllNegatives(name):
+	negName = name + "AllNegatives.csv"
+	return pd.read_csv( negName,  dtype = {"seqName": str}) 
+
+def openBalancedNegatives(name):
+	negativesName = name + "BalancedNegatives.csv"
+	return pd.read_csv( negativesName, dtype = {"seqName": str}) 
+
+def openBalancedPositives(name):
+	positivesName = name + "BalancedPositives.csv"
+	return pd.read_csv( positivesName, dtype = {"seqName": str}) 
+	
+	
+
+#predicting and storing DeepPASTA for each Postiive/False Cluster 
+def predictInClusters(forwardStrand, reverseCompStrand, balancedDataset, loadedModel):
+	lenStrand = len(forwardStrand)
+	for index, row in balancedDataset.iterrows():
+		#print (row)
+		#for each row, slice the prediction numpy around it (1000 nts)
+		if row['strand'] == "+":
+			predictionString = prepTargetAreaForPrediction(row['start'], row['end'], forwardStrand)
+			try:
+				deepPASTAPreds = runPASTA(predictionString,loadedModel)
+		#		print ("Index: ", index)
+		#		print ("Prediction for: ", getTargetNucleotides(predictionString))
+		#		print ("Predicted values: ", deepPASTAPreds)
+				balancedDataset.at[index, "DeepPASTAPredictions"] = deepPASTAPreds
+			except:
+				print ("FAILURE ON: ", row['clusterID'])
+						
+		else:
+			#print (row['start'], row['end'])
+			rcIndexEnd = (lenStrand -1) - row['start']
+			rcIndexStart = (lenStrand -1) - row['end']
+		#	print (rcIndexStart, rcIndexEnd)
+			rcPredictionString = prepTargetAreaForPrediction(rcIndexStart, rcIndexEnd, reverseCompStrand)
+			#print (rcPredictionString)
+			try:
+				deepPASTAPreds = runPASTA(rcPredictionString,loadedModel)
+		#		print ("Index: ", index)
+		#		print ("Prediction for: ", getTargetNucleotides(rcPredictionString))
+		#		print ("Predicted values: ", deepPASTAPreds)
+				balancedDataset.at[index, "DeepPASTAPredictions"] = deepPASTAPreds
+			except:
+				print ("FAILURE ON: ", row['clusterID'])
+	return balancedDataset
+	
 
 
+
+def runDeepPASTAClusterPredictions(loadedModel, fastaLocation, name, stem, b, s):
+	fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
+	print ("Opening: ", fileName)
+	balancedPositives = openBalancedPositives(fileName)
+	balancedNegatives = openBalancedNegatives(fileName)
+	#adding column to both dataframes
+	#toSeparate['DeepPASTAPredictions'] = toSeparate.shape[0] * [0]
+	balancedPositives['DeepPASTAPredictions'] = balancedPositives.shape[0] * [[-1]]
+	balancedNegatives['DeepPASTAPredictions'] = balancedNegatives.shape[0] * [[-1]]
+	#print (balancedPositives)
+	print ("BP Size: ", balancedPositives.shape)
+	print ("BN Size: ", balancedNegatives.shape)
+	#open fastas for predictions
+	totalName = fastaLocation + "chr" + name + ".fasta"
+	seqObj = SeqIO.read(totalName, "fasta")
+	forward_seq = str(seqObj.seq)
+	reverseComp_seq = str(seqObj.reverse_complement().seq)
+	print ("Forward len: ", len(forward_seq))
+	print ("Reverse len: ", len(reverseComp_seq))
+	#predicting positive values
+	balPos = predictInClusters(forward_seq, reverseComp_seq, balancedPositives, loadedModel)
+	print ("saving positives")
+	balPos.to_csv(fileName + "BalancedPositives.csv")
+	#predicting negatives values
+	balNeg = predictInClusters(forward_seq, reverseComp_seq, balancedNegatives, loadedModel)
+	print ("saving negatives")
+	balNeg.to_csv(fileName + "BalancedNegatives.csv")
+	
+
+#load DeepPASTA model
+loadedModel = compileModel()
+
+#names for chromosomes
+chromosomes = ["15", "16", "17", "18", "19", "20", "21", "22", "Y"]
+fastaLocationLocal = "../../../aparentGenomeTesting/fastas/"
+
+names = []
+if len(sys.argv) != 1:
+	for arg in sys.argv[1:]:
+		names.append(arg)
+else:
+	names = ["22"]
+
+runDeepPASTAClusterPredictions(loadedModel, fastaLocationLocal, "Y", "./predictions/", 1, 50)
+
+
+	
+'''
 chroName = "Y"
 fastaLocs = ""
 totalName = fastaLocs + "chr" + chroName + ".fasta"
 chroSeq = SeqIO.read(totalName, "fasta")
-sliceY = chroSeq.seq[500000:500000 + 1199]
-
+sliceY = chroSeq.seq[10000:10000 + 202]
 start_time = time.time()
 print ("START TIME: ")
-outVals = runPASTA(sliceY)
+outVals = runPASTA(sliceY, loadedModel)
 print ("ELAPSED TIME: ", time.time() - start_time)
 print ("number outputs: ", len(outVals))
 print ("sequence length: ", len(sliceY))
 print ("ALL OUTPUTS: ")
 print (outVals)
+'''
 
 
+	
+
+'''
+def computeAndGraphAllROCs(trueValsArray, preds):
+	#set up true value labels
+	print ("Total true labelled positions: ", np.sum(trueValsArray))
+	######
+	#Compute ROC curve and ROC AUC for each stride length
+	fpr, tpr, thresholds = metrics.roc_curve(trueValsArray, preds)
+	prec, rec, thresholdsPR = metrics.precision_recall_curve(trueValsArray, preds)
+	auc_score = metrics.roc_auc_score(trueValsArray,preds)
+	auprc_score = metrics.average_precision_score(trueValsArray, preds)
+	posDistFPR, posDistTPR, posDistThresh, x  = maxPosDist45DegreeLine(fpr,tpr,thresholds)
+	print ("Best threshold by 45 degree line distance: ", posDistThresh)
+	equalFPR, equalTPR, equalThresh, x  = findSpecifictySensitivityEqualityPoint(fpr,tpr,thresholds)
+	print ("Best threshold by specificity Sensisitivity Equality: ", equalThresh)
+	closeFPR, closeTPR, closeThresh, x  = minDistanceTopLeftCorner(fpr,tpr,thresholds)
+	print ("Best threshold by closest to top left corner: ", closeThresh)
+	return fpr,tpr,thresholds,auc_score, prec, rec, thresholdsPR, auprc_score
 
 
+#creates ROC and PR curves for genome, using default values unless changed 
+#TODO: add X to the total graph creation once I find those numpy values
+def makeGraphsAverageCleavageValues(b = 1, s = 50, typePas = ""):
+	chromosomes = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "Y"]
+	values, bools = extractAllPredictionValues(chromosomes, "./datasets/", b, s, typePas)
+	fpr,tpr,thresholds,auc_score, prec, rec, thresholdsPR, auprc_score = computeAndGraphAllROCs(bools, values)
+	print ("AUC Score: ", auc_score)
+	print ("Avg Precision Score: ", auprc_score)
+	plt.plot(fpr, tpr)
+	plt.title(typePas + " ROC")
+	plt.xlabel("FPR")
+	plt.ylabel("TPR")
+	plt.show()
+	plt.plot(prec, rec)
+	plt.xlabel("Recall")
+	plt.ylabel("Precision")
+	plt.title(typePas + " PR")
+	plt.show()
+			
 
-
+'''

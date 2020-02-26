@@ -227,7 +227,7 @@ def graphROCMultipleDistances(names, location, pasType = "TE", bufferVal = 1, sp
 		fprs, tprs = zip(*sorted(zip(falsePositiveRates, truePositiveRates)))
 		plt.plot(fprs, tprs, 'o--', label = 'distance ' + str(d))
 	plt.plot([0,1.0],[0,1.0], '--')
-	plt.title("ROC Curve")
+	plt.title(pasType + " ROC")
 	plt.xlabel("FPR")
 	plt.ylabel("TPR")
 	plt.legend()
@@ -245,7 +245,7 @@ def graphPRMultipleDistances(names, location, pasType = "TE", bufferVal = 1, spa
 		rs, ps = zip(*sorted(zip(recalls, precisions)))
 		plt.plot(rs, ps, 'o--', label = 'distance ' + str(d))
 	plt.plot([0,1.0],[1.0,0], '--')
-	plt.title("PR Curve")
+	plt.title(pasType + " PR Curve")
 	plt.xlabel("Recall")
 	plt.ylabel("Precision")
 	plt.legend()
@@ -291,12 +291,12 @@ def condenseCSV(names, location):
 
 location = "./ConfusionMatrices/"
 names = ["1", "Y","2", "3","4", "5", "6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22"]
-
+'''
 #TE pastype
 graphROCMultipleDistances(names, location, pasType = "TE", bufferVal = 1, spacing = 50, distances = [1,25,50], tolerance = 0)
 graphPRMultipleDistances(names, location, pasType = "TE", bufferVal = 1, spacing = 50, distances = [1,25,50], tolerance = 0)
 graphThresholdsMultipleDistances(names, location, pasType = "TE", bufferVal = 1, spacing = 50, distances = [1,25,50], tolerance = 0)
-
+'''
 #IN pastype
 graphROCMultipleDistances(names, location, pasType = "IN", bufferVal = 1, spacing = 50, distances = [1,25,50], tolerance = 0)
 graphPRMultipleDistances(names, location, pasType = "IN", bufferVal = 1, spacing = 50, distances = [1,25,50], tolerance = 0)

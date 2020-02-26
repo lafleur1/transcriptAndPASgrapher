@@ -577,10 +577,14 @@ def makeGraphsAverageCleavageValues(b = 1, s = 50, typePas = ""):
 	print ("AUC Score: ", auc_score)
 	print ("Avg Precision Score: ", auprc_score)
 	plt.plot(fpr, tpr)
-	plt.title("AUC All But X IN")
+	plt.title(typePas + " ROC")
+	plt.xlabel("FPR")
+	plt.ylabel("TPR")
 	plt.show()
 	plt.plot(prec, rec)
-	plt.title("PR Curve All but X IN")
+	plt.xlabel("Recall")
+	plt.ylabel("Precision")
+	plt.title(typePas + " PR")
 	plt.show()
 	
 
@@ -1322,7 +1326,7 @@ datasetsLocation = "./datasets/"
 		
 
 #addingRowsToCM(cmLocation, chromsomeLocationsLocal, names, datasetsLocation, bufferVals, spacing, minhs, distances, tolerances, pasTypes)
-
+'''
 print ("NEW TRESHOLDS: ")
 print ('previous smallest: ', cutoffs[0])
 newValues = np.linspace(0, cutoffs[0], 5)
@@ -1333,5 +1337,10 @@ print ("NEW LARGE THRESHOLDS: ")
 newValues = [x/10.0 for x in range(1,11)]
 #making new rows for larger values
 addingRowsToCM(cMLocation, predictionLocationBicycle, names, datasetsLocation, bufferVals, spacing, newValues, distances, tolerances, pasTypes)
+'''
 
+
+#making ROC and PR curves with values in the clusters
+makeGraphsAverageCleavageValues(b = 1, s = 50, typePas = "TE")
+makeGraphsAverageCleavageValues(b = 1, s = 50, typePas = "IN")
 

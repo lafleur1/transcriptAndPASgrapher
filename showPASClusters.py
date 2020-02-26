@@ -183,7 +183,7 @@ posCurrent = 0
 while notFoundTwo:
 	contig = "Y"
 	genesDemo = ensembl.genes_at_locus(contig = "Y", position = posCurrent)
-	if len(genesDemo) >= 1:
+	if len(genesDemo) > 0:
 		#print (posCurrent)
 		#print (genesDemo)		
 		p,tn, gn, gp, gs, ga = transformPyEnsemblToPASDiagram(genesDemo)
@@ -209,7 +209,8 @@ while notFoundTwo:
 		#print ('forward peaks: ', peaksForward)
 		#print ('peaksReverse: ', peaksReverse)
 		if len(peaksForward) > 0 or len(peaksReverse) > 0 :
-			mgraph = MultiGeneVariantPASDiagram(contig, p, tn, gn, gp,  gs, pas_pos= preppedPASLocs, pas_types = preppedPASTypes, sequence = seqSlice, forwardValues = predForwardSlice, reverseValues = predReverseSlice, forwardPeaks = peaksForward, reversePeaks = peaksReverse, showHAVANAAnnotations = True)
+			#mgraph = MultiGeneVariantPASDiagram(contig, p, tn, gn, gp,  gs, pas_pos= preppedPASLocs, pas_types = preppedPASTypes, sequence = seqSlice, forwardValues = predForwardSlice, reverseValues = predReverseSlice, forwardPeaks = peaksForward, reversePeaks = peaksReverse, showHAVANAAnnotations = True)
+			mgraph = MultiGeneVariantPASDiagram(contig, p, tn, gn, gp,  gs, sequence = seqSlice, forwardValues = predForwardSlice, reverseValues = predReverseSlice, forwardPeaks = peaksForward, reversePeaks = peaksReverse, showHAVANAAnnotations = False)
 			mgraph.show()
 		posCurrent += (stop - start)
 	else:
