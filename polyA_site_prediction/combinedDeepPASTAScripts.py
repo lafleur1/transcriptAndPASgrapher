@@ -270,9 +270,8 @@ def processRNAShapesOutput(inputFile):
 				outputList.append(first+second)
 		current = 'none'
 	passedOn = outputList[0:4]
-	if len(passedOn) != 4:
-		print (passedOn)
-		print (outputList)
+	#if len(passedOn) != 4:
+	##	print (outputList)
 	count = 0
 	outputList3 = []
 	lastShape = ''
@@ -334,9 +333,9 @@ def compileModel():
 #output of model score 
 def runModel(sequence,inputFile, model ):
 	outSS = processRNAShapesOutput(inputFile) #list of three 
-	if len(outSS) != 4:
-		print ("ERROR!")
-		print (outSS)
+	#if len(outSS) != 4:
+		#print ("ERROR!")
+		#print (outSS)
 	encodedTestingSeq = oneHotEncodingForSeq([sequence])
 	encodedTestingStructure1 = oneHotEncodingForSS([outSS[1]])
 	encodedTestingStructure2 = oneHotEncodingForSS([outSS[2]])
@@ -432,11 +431,12 @@ def openBalancedPositives(name):
 #predicting and storing DeepPASTA for each Postiive/False Cluster 
 def predictInClusters(forwardStrand, reverseCompStrand, balancedDataset, loadedModel):
 	lenStrand = len(forwardStrand)
+	list_failed = []
 	for index, row in balancedDataset.iterrows():
 		#print (row)
 		#for each row, slice the prediction numpy around it (1000 nts)
 		if row['strand'] == "+":
-			predictionString = prepTargetAreaForPrediction(row['start'], row['end'], forwardStrand)
+			predictionString = prepTargetAreaForPrediction(int(row['start']), int(row['end']), forwardStrand)
 			try:
 				deepPASTAPreds = runPASTA(predictionString,loadedModel)
 		#		print ("Index: ", index)
@@ -445,13 +445,15 @@ def predictInClusters(forwardStrand, reverseCompStrand, balancedDataset, loadedM
 				balancedDataset.at[index, "DeepPASTAPredictions"] = deepPASTAPreds
 			except:
 				print ("FAILURE ON: ", row['clusterID'])
+				list_failed.append(row['clusterID'])
 						
 		else:
 			#print (row['start'], row['end'])
 			rcIndexEnd = (lenStrand -1) - row['start']
 			rcIndexStart = (lenStrand -1) - row['end']
 		#	print (rcIndexStart, rcIndexEnd)
-			rcPredictionString = prepTargetAreaForPrediction(rcIndexStart, rcIndexEnd, reverseCompStrand)
+			#print (type(reverseCompStrand))
+			rcPredictionString = prepTargetAreaForPrediction(int(rcIndexStart), int(rcIndexEnd), reverseCompStrand)
 			#print (rcPredictionString)
 			try:
 				deepPASTAPreds = runPASTA(rcPredictionString,loadedModel)
@@ -461,6 +463,7 @@ def predictInClusters(forwardStrand, reverseCompStrand, balancedDataset, loadedM
 				balancedDataset.at[index, "DeepPASTAPredictions"] = deepPASTAPreds
 			except:
 				print ("FAILURE ON: ", row['clusterID'])
+				list_failed.append(row['clusterID'])
 	return balancedDataset
 	
 
@@ -486,14 +489,18 @@ def runDeepPASTAClusterPredictions(loadedModel, fastaLocation, name, stem, b, s)
 	print ("Forward len: ", len(forward_seq))
 	print ("Reverse len: ", len(reverseComp_seq))
 	#predicting positive values
-	balPos = predictInClusters(forward_seq, reverseComp_seq, balancedPositives, loadedModel)
-	print ("saving positives")
-	balPos.to_csv(fileName + "BalancedPositives.csv")
+	#balPos = predictInClusters(forward_seq, reverseComp_seq, balancedPositives, loadedModel)
+	#print ("saving positives")
+	#balPos.to_csv(fileName + "BalancedPositives.csv")
 	#predicting negatives values
 	balNeg = predictInClusters(forward_seq, reverseComp_seq, balancedNegatives, loadedModel)
 	print ("saving negatives")
 	balNeg.to_csv(fileName + "BalancedNegatives.csv")
-	
+
+
+def readDeepPASTACSV(name, b, s):
+	fileName = "./predictions/chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
+	return pd.read_csv(fileName + "BalancedPositives.csv"), pd.read_csv(fileName + 	"BalancedNegatives.csv")
 
 #load DeepPASTA model
 loadedModel = compileModel()
@@ -501,6 +508,7 @@ loadedModel = compileModel()
 #names for chromosomes
 chromosomes = ["15", "16", "17", "18", "19", "20", "21", "22", "Y"]
 fastaLocationLocal = "../../../aparentGenomeTesting/fastas/"
+fastaLocationBicycle =  "../fastas/" 
 
 names = []
 if len(sys.argv) != 1:
@@ -509,7 +517,9 @@ if len(sys.argv) != 1:
 else:
 	names = ["22"]
 
-runDeepPASTAClusterPredictions(loadedModel, fastaLocationLocal, "Y", "./predictions/", 1, 50)
+
+for name in names:
+	runDeepPASTAClusterPredictions(loadedModel, fastaLocationBicycle, name, "./predictions/", 1, 50)
 
 
 	
