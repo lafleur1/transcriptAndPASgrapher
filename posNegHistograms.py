@@ -112,5 +112,59 @@ def createHistogramForPASType(typePAS = ""):
 	plt.legend()
 	plt.show()
 
-createHistogramForPASType("TE")
+def createBoxAndWhiskerForPASTypeSepStrands(typePAS = ""):
+	stem = "./datasets/"
+	names = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "Y"]
+	print ("Forward strand: ")
+	negativeValsForward, positiveValsForward = extractAllPositiveAndNegativePredictionValues(names, stem, 1, 50, typePAS, "+")
+	print ("Reverse strand:")
+	negativeValsReverse, positiveValsReverse = extractAllPositiveAndNegativePredictionValues(names, stem, 1, 50, typePAS, "-")
+	print ("Number positive on forward strand: ", positiveValsForward.size, " Number negative on forward strand: ", negativeValsForward.size)
+	print ("Number positive on reverse strand: ", positiveValsReverse.size, " Number negative on reverse strand: ", negativeValsReverse.size)
+	toPlot = [negativeValsForward, positiveValsForward, negativeValsReverse, positiveValsReverse]
+	fig = plt.figure(1, figsize=(9, 6))
+	ax = fig.add_subplot(111)
+	bp = ax.boxplot(toPlot)
+	ax.set_xticklabels(['Negative +', 'Positive +', 'Negative -', 'Positve -'])
+	plt.title("Distribution of " + typePAS + " Average Cleavage Values")
+	plt.show()
 
+def createBoxAndWhiskerForPASType(typePAS = ""):
+	stem = "./datasets/"
+	names = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "Y"]
+	negVals, posVals = extractAllPositiveAndNegativePredictionValues(names, stem, 1, 50, typePAS)
+	toPlot = [negVals, posVals]
+	fig = plt.figure(1, figsize=(9, 6))
+	ax = fig.add_subplot(111)
+	bp = ax.boxplot(toPlot)
+	ax.set_xticklabels(['Negative', 'Positive'])
+	plt.title("Distribution of " + typePAS + " Average Cleavage Values")
+	plt.show()
+	
+	
+	
+def createBoxAndWhiskerForAllPASTypes():
+	pasTypes = ['', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU']
+	toPlot = []
+	tick_labels = []
+	for typePAS in pasTypes:
+		print ("ON PAS TYPE: ", typePAS)
+		stem = "./datasets/"
+		names = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "Y"]
+		negVals, posVals = extractAllPositiveAndNegativePredictionValues(names, stem, 1, 50, typePAS)
+		toPlot.append(negVals)
+		toPlot.append(posVals)
+		tick_labels.append("Negative " + typePAS)
+		tick_labels.append("Positive " + typePAS)
+	fig = plt.figure(1, figsize=(9, 6))
+	ax = fig.add_subplot(111)
+	bp = ax.boxplot(toPlot)
+	ax.set_xticklabels(tick_labels)
+	plt.title("Distribution of APARENT Average Cleavage Values")
+	plt.show()
+#createHistogramForPASType("TE")
+#createBoxAndWhiskerForPASType("IN")
+
+
+#createBoxAndWhiskerForPASType("TE")
+createBoxAndWhiskerForAllPASTypes()

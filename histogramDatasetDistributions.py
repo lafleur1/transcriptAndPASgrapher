@@ -68,8 +68,9 @@ def plotBothDistributions():
     plt.xlabel("Cluster Type")
     plt.ylabel("Count")
     plt.show()
-	
-	
+
+
+
 '''
 type_dist.plot.bar()
 plt.title("Human polyA Site Clusters by Type")
