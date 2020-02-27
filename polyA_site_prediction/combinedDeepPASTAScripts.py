@@ -489,9 +489,9 @@ def runDeepPASTAClusterPredictions(loadedModel, fastaLocation, name, stem, b, s)
 	print ("Forward len: ", len(forward_seq))
 	print ("Reverse len: ", len(reverseComp_seq))
 	#predicting positive values
-	#balPos = predictInClusters(forward_seq, reverseComp_seq, balancedPositives, loadedModel)
-	#print ("saving positives")
-	#balPos.to_csv(fileName + "BalancedPositives.csv")
+	balPos = predictInClusters(forward_seq, reverseComp_seq, balancedPositives, loadedModel)
+	print ("saving positives")
+	balPos.to_csv(fileName + "BalancedPositives.csv")
 	#predicting negatives values
 	balNeg = predictInClusters(forward_seq, reverseComp_seq, balancedNegatives, loadedModel)
 	print ("saving negatives")
@@ -517,7 +517,7 @@ if len(sys.argv) != 1:
 else:
 	names = ["22"]
 
-
+print (names)
 for name in names:
 	runDeepPASTAClusterPredictions(loadedModel, fastaLocationBicycle, name, "./predictions/", 1, 50)
 
