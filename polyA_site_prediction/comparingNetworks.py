@@ -138,6 +138,19 @@ def extractAllPositiveAndNegativePredictionValuesDeepPASTA(names, pasType = "", 
 	return negVals, posVals
 
 
+def extractPredictionValuesBooleansDeepPASTA(names, pasType = "", usingStrand = ""):
+	posVals = np.array([])
+	negVals = np.array([])
+	for name in names:
+		print ("ON: ", name)
+		positives, negatives = readDeepPASTACSV(name,1 , 50)
+		dummyNegatives, dummyPositives = extractPredictionValuesSeparateArraysDeepPASTA(negatives, positives, pasType, usingStrand)
+		posVals = np.concatenate((posVals, dummyPositives))
+		negVals = np.concatenate((negVals, dummyNegatives))
+	totalPredictions = np.concatenate((negVals, posVals))
+	totalBooleans = np.concatenate((np.zeros(negVals.shape[0]),np.ones(posVals.shape[0])))
+	return totalPredictions, totalBooleans
+
 def createBoxAndWhiskerForAllPASTypes(chromosomes):
 	pasTypes = ['', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU']
 	toPlot = []
@@ -329,19 +342,21 @@ def compareAPARENTandDeepPASTA(chromosomes):
 	for pType in pasTypes:
 		#for each type, pull the prediction values for all chromsomes
 		values, bools = extractAllPredictionValuesAPARENT(chromosomes, "../datasets/", b = 1, s = 50, pasType = pType )
-		dvalues, dbools = negVals, posVals = extractAllPositiveAndNegativePredictionValuesDeepPASTA(chromosomes, pasType = pType)
+		dvalues, dbools = negVals, posVals = extractPredictionValuesBooleansDeepPASTA(chromosomes, pasType = pType)
 		#APARENT 
 		print ("PASTYPE: ", pType)
 		fprA,tprA,thresholdsA,auc_scoreA, precA, recA, thresholdsPRA, auprc_scoreA = computeAndGraphAllROCs(bools, values)
 		print ("	APARRENT AUC Score: ", auc_scoreA)
 		print ("	APARENT Avg Precision Score: ", auprc_scoreA)
+		#print (dbools, dvalues)
 		fprD,tprD,thresholdsD,auc_scoreD, precD, recD, thresholdsPRD, auprc_scoreD = computeAndGraphAllROCs(dbools, dvalues)
 		print ("	DeepPASTA AUC Score: ", auc_scoreD)
 		print ("	DeepPASTA Avg Precision Score: ", auprc_scoreD)
+		print ("  ")
 		plt.figure()
 		plt.plot(fprA, tprA, label = "APARENT")
 		plt.plot(fprD, tprD, label = "DeepPASTA")
-		plt.title(typePas + " ROC")
+		plt.title(pType + " ROC")
 		plt.xlabel("FPR")
 		plt.ylabel("TPR")
 		plt.legend()
@@ -353,7 +368,7 @@ def compareAPARENTandDeepPASTA(chromosomes):
 		plt.xlabel("Recall")
 		plt.ylabel("Precision")
 		plt.legend()
-		plt.title(typePas + " PR")
+		plt.title(pType + " PR")
 		plt.savefig(pType + "PR_v1.png")
 		plt.close()
 	

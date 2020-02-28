@@ -1,0 +1,129 @@
+PASTYPE:  
+Total true labelled positions:  1130716.0
+Best threshold by 45 degree line distance:  0.0006451958959457572
+Best threshold by specificity Sensisitivity Equality:  0.0004353403324525321
+Best threshold by closest to top left corner:  0.0005044955843394357
+	APARRENT AUC Score:  0.8424882344895691
+	APARENT Avg Precision Score:  0.8622812575269654
+Total true labelled positions:  191025.0
+Best threshold by 45 degree line distance:  0.49300376
+Best threshold by specificity Sensisitivity Equality:  0.3911059
+Best threshold by closest to top left corner:  0.42138287
+	DeepPASTA AUC Score:  0.8389191916786981
+	DeepPASTA Avg Precision Score:  0.7845667173434256
+  
+
+PASTYPE:  IN
+Total true labelled positions:  239963.0
+Best threshold by 45 degree line distance:  0.0009131708903363947
+Best threshold by specificity Sensisitivity Equality:  0.0006987489069930374
+Best threshold by closest to top left corner:  0.0007986492131359617
+	APARRENT AUC Score:  0.8854406615522772
+	APARENT Avg Precision Score:  0.9014558412067337
+Total true labelled positions:  59907.0
+Best threshold by 45 degree line distance:  0.49244767
+Best threshold by specificity Sensisitivity Equality:  0.38078472
+Best threshold by closest to top left corner:  0.41641232
+	DeepPASTA AUC Score:  0.8606993548138955
+	DeepPASTA Avg Precision Score:  0.833447283701837
+  
+
+PASTYPE:  TE
+Total true labelled positions:  650558.0
+Best threshold by 45 degree line distance:  0.0004997881429257436
+Best threshold by specificity Sensisitivity Equality:  0.0003545429027066608
+Best threshold by closest to top left corner:  0.00039960054849731165
+	APARRENT AUC Score:  0.8546311349200044
+	APARENT Avg Precision Score:  0.8880169023738527
+Total true labelled positions:  43763.0
+Best threshold by 45 degree line distance:  0.449909
+Best threshold by specificity Sensisitivity Equality:  0.38913766
+Best threshold by closest to top left corner:  0.42007563
+	DeepPASTA AUC Score:  0.791280481603206
+	DeepPASTA Avg Precision Score:  0.6555420681836622
+
+PASTYPE:  IG
+Total true labelled positions:  112831.0
+Best threshold by 45 degree line distance:  0.0009508381475160815
+Best threshold by specificity Sensisitivity Equality:  0.0007893054970671594
+Best threshold by closest to top left corner:  0.0008531060915889352
+	APARRENT AUC Score:  0.8958996217448658
+	APARENT Avg Precision Score:  0.9034282738277147
+Total true labelled positions:  35991.0
+Best threshold by 45 degree line distance:  0.42868266
+Best threshold by specificity Sensisitivity Equality:  0.39295372
+Best threshold by closest to top left corner:  0.41452393
+	DeepPASTA AUC Score:  0.8905484902746466
+	DeepPASTA Avg Precision Score:  0.8698375287330844
+ 
+PASTYPE:  AI
+Total true labelled positions:  86598.0
+Best threshold by 45 degree line distance:  0.0009923867871223663
+Best threshold by specificity Sensisitivity Equality:  0.0007584432513405252
+Best threshold by closest to top left corner:  0.0008609901502560595
+	APARRENT AUC Score:  0.8890245273159632
+	APARENT Avg Precision Score:  0.9021886853094041
+Total true labelled positions:  28428.0
+Best threshold by 45 degree line distance:  0.4380185
+Best threshold by specificity Sensisitivity Equality:  0.38780743
+Best threshold by closest to top left corner:  0.4163266
+	DeepPASTA AUC Score:  0.8861899163130659
+	DeepPASTA Avg Precision Score:  0.8662194088831657
+  
+
+PASTYPE:  EX
+Total true labelled positions:  46283.0
+Best threshold by 45 degree line distance:  0.00037058908149642126
+Best threshold by specificity Sensisitivity Equality:  0.0001908079827574381
+Best threshold by closest to top left corner:  0.00021643054177340155
+	APARRENT AUC Score:  0.6820755503124252
+	APARENT Avg Precision Score:  0.7200912499336334
+Total true labelled positions:  7811.0
+Best threshold by 45 degree line distance:  0.53804153
+Best threshold by specificity Sensisitivity Equality:  0.35718364
+Best threshold by closest to top left corner:  0.41567954
+	DeepPASTA AUC Score:  0.5515006309782907
+	DeepPASTA Avg Precision Score:  0.44593757502357456
+
+PASTYPE:  DS
+Total true labelled positions:  48334.0
+Best threshold by 45 degree line distance:  0.0006097662137388118
+Best threshold by specificity Sensisitivity Equality:  0.0004680963368348155
+Best threshold by closest to top left corner:  0.0005316608683362854
+	APARRENT AUC Score:  0.864062723733841
+	APARENT Avg Precision Score:  0.8762291560076756
+Total true labelled positions:  7521.0
+Best threshold by 45 degree line distance:  0.49432334
+Best threshold by specificity Sensisitivity Equality:  0.40772447
+Best threshold by closest to top left corner:  0.4298023
+	DeepPASTA AUC Score:  0.8760012070048361
+	DeepPASTA Avg Precision Score:  0.8175888612914906
+  
+PASTYPE:  AE
+Total true labelled positions:  47955.0
+Best threshold by 45 degree line distance:  0.0004153526974732813
+Best threshold by specificity Sensisitivity Equality:  0.0003627143002761711
+Best threshold by closest to top left corner:  0.0004047125457386106
+	APARRENT AUC Score:  0.7062909960645323
+	APARENT Avg Precision Score:  0.7132898078222702
+Total true labelled positions:  5632.0
+Best threshold by 45 degree line distance:  0.50717163
+Best threshold by specificity Sensisitivity Equality:  0.38595685
+Best threshold by closest to top left corner:  0.4169371
+	DeepPASTA AUC Score:  0.7430199579929966
+	DeepPASTA Avg Precision Score:  0.6000060217156307
+  
+PASTYPE:  AU
+Total true labelled positions:  11496.0
+Best threshold by 45 degree line distance:  0.0006718715464488084
+Best threshold by specificity Sensisitivity Equality:  0.0005037975748304494
+Best threshold by closest to top left corner:  0.0006284309559200315
+	APARRENT AUC Score:  0.8841184979529694
+	APARENT Avg Precision Score:  0.9101200366035915
+Total true labelled positions:  1972.0
+Best threshold by 45 degree line distance:  0.48485285
+Best threshold by specificity Sensisitivity Equality:  0.4104701
+Best threshold by closest to top left corner:  0.4408207
+	DeepPASTA AUC Score:  0.8913340003624799
+	DeepPASTA Avg Precision Score:  0.8569654337610343
+

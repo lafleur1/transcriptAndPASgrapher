@@ -74,6 +74,8 @@ def extractAllPositiveAndNegativePredictionValues(names, stem, b, s, pasType = "
 		negVals = np.concatenate((negVals, dummyNegatives))
 	return negVals, posVals
 
+
+
 def openBalancedNegatives(name):
 	negativesName = name + "BalancedNegatives.csv"
 	#colNames = ["seqName", "start", "end", "clusterID", "strand", "type", "side"]
@@ -141,30 +143,84 @@ def createBoxAndWhiskerForPASType(typePAS = ""):
 	plt.title("Distribution of " + typePAS + " Average Cleavage Values")
 	plt.show()
 	
+
+def extractBalancedPositiveDatasetVal(names, stem, b, s, col, pasType):
+	allVals = posVals = np.array([])
+	for name in names:
+		fileName = stem + "chro" + name + "_NegSpaces" + str(b) + "_shifted" + str(s) + "Nts"
+		#print ("ON: ", name)
+		positives = openBalancedPositives(fileName)
+		if pasType != '':
+			filteredType = positives[positives['type'] == pasType]
+			valsNumpy = filteredType[col].to_numpy()
+			allVals =  np.concatenate((allVals, valsNumpy))
+		else:
+			valsNumpy = positives[col].to_numpy()
+			allVals =  np.concatenate((allVals, valsNumpy))
+	return allVals
+
+
+def openPASClustersColValues(colType, pasType = 'All'):
+	#opening all the true values from PolyASite2.0 
+	colnames = ["seqName",  "start" , "end",  "clusterID",  "avgTPM",  "strand",   "percentSupporting",   "protocolsSupporting",  "avgTPM2",   "type",   "upstreamClusters"]
+	pas_stuff =pd.read_csv('atlas.clusters.hg38.2-0.bed',delimiter='\t', names = colnames, dtype = {"seqName": str}) 
+	if pasType == "All":
+		return pas_stuff[colType].to_numpy()
+	else:
+		maskType = pas_stuff["type"] == pasType
+		maskedTrue = pas_stuff[maskType]
+		return maskedTrue[colType].to_numpy()
+
+def extractAllValuesDataset(colType):
+	pasTypes = ['All', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU']
+	toPlot = []
+	tick_labels = []
+	for typePAS in pasTypes:
+		print ("ON PAS TYPE: ", typePAS)
+		stem = "./datasets/"
+		names = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"]
+		values = openPASClustersColValues(colType, typePAS)
+		print ("Mean: ", np.mean(values))
+		print ("Std dev: ", np.std(values))
+		print ("n: ", values.shape[0])
+		toPlot.append(values)
+		tick_labels.append(typePAS)
+	fig = plt.figure(1, figsize=(9, 6))
+	ax = fig.add_subplot(111)
+	bp = ax.boxplot(toPlot)
+	ax.set_xticklabels(tick_labels)
+	plt.title("Distribution of " + colType + " Values")
+	plt.show()
 	
-	
-def createBoxAndWhiskerForAllPASTypes():
+
+def createBoxAndWhiskerForAllPASTypes(colType):
 	pasTypes = ['', 'IN', 'TE', 'IG', 'AI', 'EX', 'DS', 'AE', 'AU']
 	toPlot = []
 	tick_labels = []
 	for typePAS in pasTypes:
 		print ("ON PAS TYPE: ", typePAS)
 		stem = "./datasets/"
-		names = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "Y"]
-		negVals, posVals = extractAllPositiveAndNegativePredictionValues(names, stem, 1, 50, typePAS)
-		toPlot.append(negVals)
-		toPlot.append(posVals)
-		tick_labels.append("Negative " + typePAS)
-		tick_labels.append("Positive " + typePAS)
+		names = ["1","2","3","4","5","6","7","8","9","10","11","12","13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"]
+		values = extractBalancedPositiveDatasetVal(names, stem, 1, 50, colType, typePAS)
+		print ("Mean: ", np.mean(values))
+		print ("Std dev: ", np.std(values))
+		print ("n: ", values.shape[0])
+		toPlot.append(values)
+		tick_labels.append(typePAS)
 	fig = plt.figure(1, figsize=(9, 6))
 	ax = fig.add_subplot(111)
 	bp = ax.boxplot(toPlot)
 	ax.set_xticklabels(tick_labels)
-	plt.title("Distribution of APARENT Average Cleavage Values")
+	plt.title("Distribution of Balanced" + colType + " Values")
 	plt.show()
+	
+	
+	
 #createHistogramForPASType("TE")
 #createBoxAndWhiskerForPASType("IN")
-
-
 #createBoxAndWhiskerForPASType("TE")
-createBoxAndWhiskerForAllPASTypes()
+#createBoxAndWhiskerForAllPASTypes()
+createBoxAndWhiskerForAllPASTypes('avgTPM')
+extractAllValuesDataset('avgTPM')
+createBoxAndWhiskerForAllPASTypes('percentSupporting')
+extractAllValuesDataset('percentSupporting')
